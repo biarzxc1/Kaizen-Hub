@@ -884,10 +884,10 @@ function AsusLib:CreateWindow(title: string)
 
 		if #WindowObj.Tabs == 1 then select() end
 
-		-- ---------- LABEL ----------
+		-- ---------- LABEL (card-style) ----------
 		function TabObj:CreateLabel(text: string)
 			local Card = new("Frame", {
-				Size                   = UDim2.new(1, 0, 0, IsMobile and 38 or 42),
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 34 or 38),
 				BackgroundColor3       = THEME.Card,
 				BorderSizePixel        = 0,
 				LayoutOrder            = nextOrder(),
@@ -895,17 +895,85 @@ function AsusLib:CreateWindow(title: string)
 			})
 			corner(10, Card)
 			local tl = new("TextLabel", {
-				Size                   = UDim2.new(1, -28, 1, 0),
-				Position               = UDim2.new(0, 14, 0, 0),
+				Size                   = UDim2.new(1, -24, 1, 0),
+				Position               = UDim2.new(0, 12, 0, 0),
 				BackgroundTransparency = 1,
 				Text                   = text,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = IsMobile and 13 or 14,
+				TextSize               = IsMobile and 12 or 13,
 				TextXAlignment         = Enum.TextXAlignment.Left,
 				Parent                 = Card,
 			})
 			return { SetText = function(_, s: string) tl.Text = s end }
+		end
+
+		-- ---------- SECTION (group heading with divider rule) ----------
+		-- Matches the "Item ESP" look: small bold label above a thin hairline
+		-- that spans the full content width. Purely structural — no card bg.
+		function TabObj:CreateSection(text: string)
+			local Holder = new("Frame", {
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 26 or 28),
+				BackgroundTransparency = 1,
+				LayoutOrder            = nextOrder(),
+				Parent                 = Page,
+			})
+			-- Small top spacer so sections feel separated from the card above
+			new("UIPadding", {
+				PaddingTop    = UDim.new(0, IsMobile and 6 or 8),
+				PaddingBottom = UDim.new(0, 0),
+				Parent        = Holder,
+			})
+
+			local tl = new("TextLabel", {
+				Size                   = UDim2.new(1, 0, 1, -5),
+				Position               = UDim2.fromOffset(0, 0),
+				BackgroundTransparency = 1,
+				Text                   = text,
+				TextColor3             = THEME.Text,
+				Font                   = Enum.Font.GothamBold,
+				TextSize               = IsMobile and 12 or 13,
+				TextXAlignment         = Enum.TextXAlignment.Left,
+				TextYAlignment         = Enum.TextYAlignment.Center,
+				Parent                 = Holder,
+			})
+
+			-- Hairline divider pinned to the bottom
+			local Rule = new("Frame", {
+				AnchorPoint            = Vector2.new(0, 1),
+				Position               = UDim2.new(0, 0, 1, 0),
+				Size                   = UDim2.new(1, 0, 0, 1),
+				BackgroundColor3       = THEME.Text,
+				BackgroundTransparency = 0.86,
+				BorderSizePixel        = 0,
+				Parent                 = Holder,
+			})
+
+			return {
+				SetText = function(_, s: string) tl.Text = s end,
+				Instance = Holder,
+				Rule     = Rule,
+			}
+		end
+
+		-- ---------- DIVIDER (hairline only, no label) ----------
+		function TabObj:CreateDivider()
+			local Holder = new("Frame", {
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 10 or 12),
+				BackgroundTransparency = 1,
+				LayoutOrder            = nextOrder(),
+				Parent                 = Page,
+			})
+			new("Frame", {
+				AnchorPoint            = Vector2.new(0, 0.5),
+				Position               = UDim2.new(0, 0, 0.5, 0),
+				Size                   = UDim2.new(1, 0, 0, 1),
+				BackgroundColor3       = THEME.Text,
+				BackgroundTransparency = 0.88,
+				BorderSizePixel        = 0,
+				Parent                 = Holder,
+			})
+			return { Instance = Holder }
 		end
 
 		-- ==============================================================
@@ -946,9 +1014,18 @@ function AsusLib:CreateWindow(title: string)
 			})
 			corner(10, Card)
 			stroke(THEME.BorderSoft, 1, Card, 0.92)
-			padding(Card, IsMobile and 9 or 11, IsMobile and 9 or 11, IsMobile and 12 or 14, IsMobile and 12 or 14)
+			-- Vertical padding collapses when there's no description so
+			-- the row becomes a tight single-line switch — matches the
+			-- Asus Hub screenshot where rows are ~36px tall.
+			local padY
+			if hasDesc then
+				padY = IsMobile and 9 or 11
+			else
+				padY = IsMobile and 7 or 9
+			end
+			padding(Card, padY, padY, IsMobile and 12 or 14, IsMobile and 12 or 14)
 			new("UISizeConstraint", {
-				MinSize = Vector2.new(0, IsMobile and 40 or 44),
+				MinSize = Vector2.new(0, (hasDesc and (IsMobile and 42 or 46)) or (IsMobile and 36 or 38)),
 				Parent  = Card,
 			})
 			glass(Card, 0.4)
