@@ -963,4 +963,17 @@ function AsusLib:CreateWindow(title: string)
 	return WindowObj
 end
 
+-- Expose globally so both usage patterns work:
+--   local AsusLib = loadstring(game:HttpGet("..."))()   -> captured return value
+--   loadstring(game:HttpGet("..."))(); AsusLib:...      -> global lookup
+pcall(function()
+	if typeof(getgenv) == "function" then
+		getgenv().AsusLib = AsusLib
+	end
+end)
+pcall(function()
+	_G.AsusLib = AsusLib
+	shared.AsusLib = AsusLib
+end)
+
 return AsusLib
