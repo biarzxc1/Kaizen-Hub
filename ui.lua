@@ -37,26 +37,31 @@ local IsMobile    = UserInputService.TouchEnabled and not UserInputService.Keybo
 -- THEME (shadcn/ui dark)
 -- ==========================================================================
 local THEME = {
-	Window              = Color3.fromRGB(14, 14, 16),
-	WindowTransparency  = 0.08,
-	Sidebar             = Color3.fromRGB(16, 16, 18),
-	Card                = Color3.fromRGB(32, 32, 36),
-	CardTransparency    = 0.15,
-	CardHover           = Color3.fromRGB(44, 44, 50),
+	Window              = Color3.fromRGB(12, 12, 14),
+	WindowTransparency  = 0.06,
+	Sidebar             = Color3.fromRGB(14, 14, 16),
+	-- Cards are visibly darker than the window so they read as
+	-- their own elevation layer (Asus Hub style).
+	Card                = Color3.fromRGB(22, 22, 24),
+	CardTransparency    = 0.05,
+	CardHover           = Color3.fromRGB(30, 30, 34),
 	Accent              = Color3.fromRGB(255, 255, 255),
 	Text                = Color3.fromRGB(245, 245, 247),
 	SubText             = Color3.fromRGB(161, 161, 170),
 	TabInactive         = Color3.fromRGB(161, 161, 170),
 	-- shadcn switch
-	SwitchOff           = Color3.fromRGB(39, 39, 42),   -- input
-	SwitchOn            = Color3.fromRGB(250, 250, 250),-- primary
+	SwitchOff           = Color3.fromRGB(44, 44, 48),
+	SwitchOn            = Color3.fromRGB(250, 250, 250),
 	ThumbLight          = Color3.fromRGB(255, 255, 255),
 	ThumbDark           = Color3.fromRGB(10, 10, 10),
 	-- shadcn slider
-	TrackOff            = Color3.fromRGB(39, 39, 42),   -- secondary (empty track)
-	TrackOn             = Color3.fromRGB(250, 250, 250),-- primary (filled track)
+	TrackOff            = Color3.fromRGB(44, 44, 48),
+	TrackOn             = Color3.fromRGB(250, 250, 250),
 	Border              = Color3.fromRGB(63, 63, 70),
 	BorderSoft          = Color3.fromRGB(255, 255, 255),
+	-- Dividers: pure white, very high transparency for a soft hairline
+	Divider             = Color3.fromRGB(255, 255, 255),
+	DividerAlpha        = 0.82,
 	Toast               = Color3.fromRGB(24, 24, 27),
 }
 
@@ -628,6 +633,18 @@ function AsusLib:CreateWindow(title: string)
 
 	makeDraggable(Window, TitleBar)
 
+	-- Hairline divider under the title bar — matches the Asus Hub look.
+	new("Frame", {
+		Name                   = "HeaderDivider",
+		Size                   = UDim2.new(1, 0, 0, 1),
+		Position               = UDim2.new(0, 0, 0, titleBarHeight),
+		BackgroundColor3       = THEME.Divider,
+		BackgroundTransparency = THEME.DividerAlpha,
+		BorderSizePixel        = 0,
+		ZIndex                 = 2,
+		Parent                 = Window,
+	})
+
 	-- ---------- BODY ----------
 	local Body = new("Frame", {
 		Size                   = UDim2.new(1, 0, 1, -titleBarHeight),
@@ -681,6 +698,18 @@ function AsusLib:CreateWindow(title: string)
 		Parent        = TabList,
 	})
 
+	-- Vertical hairline divider between sidebar and content.
+	local SidebarDivider = new("Frame", {
+		Name                   = "SidebarDivider",
+		Size                   = UDim2.new(0, 1, 1, 0),
+		Position               = UDim2.new(0, sidebarWidth, 0, 0),
+		BackgroundColor3       = THEME.Divider,
+		BackgroundTransparency = THEME.DividerAlpha,
+		BorderSizePixel        = 0,
+		ZIndex                 = 2,
+		Parent                 = Body,
+	})
+
 	-- Content
 	local Content = new("Frame", {
 		Size                   = UDim2.new(1, -sidebarWidth, 1, 0),
@@ -698,6 +727,7 @@ function AsusLib:CreateWindow(title: string)
 			tween(Window, 0.2, { Size = UDim2.fromOffset(s.X, s.Y) })
 			local newSidebar = computeSidebarWidth()     -- uses the fresh winW
 			tween(Sidebar, 0.2, { Size = UDim2.new(0, newSidebar, 1, 0) })
+			tween(SidebarDivider, 0.2, { Position = UDim2.new(0, newSidebar, 0, 0) })
 			tween(Content, 0.2, {
 				Size     = UDim2.new(1, -newSidebar, 1, 0),
 				Position = UDim2.new(0, newSidebar, 0, 0),
@@ -943,14 +973,14 @@ function AsusLib:CreateWindow(title: string)
 				Parent                 = Holder,
 			})
 
-			-- Hairline divider pinned to the bottom. Uses a very light white
-			-- (0.80 transparency) so it reads as a soft line, not a bar.
+			-- Hairline divider pinned to the bottom. Uses the unified
+			-- THEME.Divider constant so it matches the header + sidebar rules.
 			local Rule = new("Frame", {
 				AnchorPoint            = Vector2.new(0, 1),
 				Position               = UDim2.new(0, 0, 1, 0),
 				Size                   = UDim2.new(1, 0, 0, 1),
-				BackgroundColor3       = Color3.fromRGB(255, 255, 255),
-				BackgroundTransparency = 0.80,
+				BackgroundColor3       = THEME.Divider,
+				BackgroundTransparency = THEME.DividerAlpha,
 				BorderSizePixel        = 0,
 				Parent                 = Holder,
 			})
@@ -974,8 +1004,8 @@ function AsusLib:CreateWindow(title: string)
 				AnchorPoint            = Vector2.new(0, 0.5),
 				Position               = UDim2.new(0, 0, 0.5, 0),
 				Size                   = UDim2.new(1, 0, 0, 1),
-				BackgroundColor3       = Color3.fromRGB(255, 255, 255),
-				BackgroundTransparency = 0.82,
+				BackgroundColor3       = THEME.Divider,
+				BackgroundTransparency = THEME.DividerAlpha,
 				BorderSizePixel        = 0,
 				Parent                 = Holder,
 			})
@@ -1118,15 +1148,18 @@ function AsusLib:CreateWindow(title: string)
 			local knobOff = UDim2.fromOffset(thumbPad, thumbPad)
 
 			local function render(animated: boolean?)
-				local t = (animated == false) and 0 or 0.18
+				-- Quint-out easing gives the snappy, smooth shadcn feel.
+				local t = (animated == false) and 0 or 0.14
+				local style = Enum.EasingStyle.Quint
+				local dir   = Enum.EasingDirection.Out
 				if state then
-					tween(Switch,       t, { BackgroundColor3 = THEME.SwitchOn })
-					tween(SwitchStroke, t, { Transparency = 1 })
-					tween(Knob,         t, { Position = knobOn,  BackgroundColor3 = THEME.ThumbDark })
+					tween(Switch,       t, { BackgroundColor3 = THEME.SwitchOn },                                           style, dir)
+					tween(SwitchStroke, t, { Transparency = 1 },                                                            style, dir)
+					tween(Knob,         t, { Position = knobOn,  BackgroundColor3 = THEME.ThumbDark },                      style, dir)
 				else
-					tween(Switch,       t, { BackgroundColor3 = THEME.SwitchOff })
-					tween(SwitchStroke, t, { Transparency = 0.4 })
-					tween(Knob,         t, { Position = knobOff, BackgroundColor3 = THEME.ThumbLight })
+					tween(Switch,       t, { BackgroundColor3 = THEME.SwitchOff },                                          style, dir)
+					tween(SwitchStroke, t, { Transparency = 0.4 },                                                          style, dir)
+					tween(Knob,         t, { Position = knobOff, BackgroundColor3 = THEME.ThumbLight },                     style, dir)
 				end
 			end
 
@@ -1450,6 +1483,325 @@ function AsusLib:CreateWindow(title: string)
 			Card.MouseButton1Click:Connect(function() task.spawn(cb) end)
 
 			return { Fire = function() task.spawn(cb) end }
+		end
+
+		-- ---------- PARAGRAPH (title + body text) ----------
+		function TabObj:CreateParagraph(opts: { Title: string?, Content: string? })
+			local Card = new("Frame", {
+				Size                   = UDim2.new(1, 0, 0, 0),
+				AutomaticSize          = Enum.AutomaticSize.Y,
+				BackgroundColor3       = THEME.Card,
+				BorderSizePixel        = 0,
+				LayoutOrder            = nextOrder(),
+				Parent                 = Page,
+			})
+			corner(12, Card)
+			stroke(THEME.BorderSoft, 1, Card, 0.92)
+			padding(Card, IsMobile and 12 or 14, IsMobile and 12 or 14, IsMobile and 14 or 16, IsMobile and 14 or 16)
+			new("UIListLayout", {
+				Padding        = UDim.new(0, 4),
+				SortOrder      = Enum.SortOrder.LayoutOrder,
+				FillDirection  = Enum.FillDirection.Vertical,
+				Parent         = Card,
+			})
+
+			if opts.Title and opts.Title ~= "" then
+				new("TextLabel", {
+					Size                   = UDim2.new(1, 0, 0, IsMobile and 18 or 20),
+					BackgroundTransparency = 1,
+					Text                   = opts.Title,
+					TextColor3             = THEME.Text,
+					Font                   = Enum.Font.GothamBold,
+					TextSize               = IsMobile and 14 or 15,
+					TextXAlignment         = Enum.TextXAlignment.Left,
+					LayoutOrder            = 1,
+					Parent                 = Card,
+				})
+			end
+			local body = new("TextLabel", {
+				Size                   = UDim2.new(1, 0, 0, 0),
+				AutomaticSize          = Enum.AutomaticSize.Y,
+				BackgroundTransparency = 1,
+				Text                   = opts.Content or "",
+				TextColor3             = THEME.SubText,
+				Font                   = Enum.Font.Gotham,
+				TextSize               = IsMobile and 12 or 13,
+				TextXAlignment         = Enum.TextXAlignment.Left,
+				TextYAlignment         = Enum.TextYAlignment.Top,
+				TextWrapped            = true,
+				LayoutOrder            = 2,
+				Parent                 = Card,
+			})
+			return {
+				SetContent = function(_, s: string) body.Text = s or "" end,
+			}
+		end
+
+		-- ---------- INPUT (textbox) ----------
+		function TabObj:CreateInput(opts: {
+			Name: string,
+			Default: string?,
+			Placeholder: string?,
+			Numeric: boolean?,
+			Callback: ((string) -> ())?,
+		})
+			local cb = opts.Callback or function() end
+			local Card = new("Frame", {
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 62 or 68),
+				BackgroundColor3       = THEME.Card,
+				BorderSizePixel        = 0,
+				LayoutOrder            = nextOrder(),
+				Parent                 = Page,
+			})
+			corner(12, Card)
+			stroke(THEME.BorderSoft, 1, Card, 0.92)
+			padding(Card, IsMobile and 10 or 12, IsMobile and 10 or 12, IsMobile and 14 or 16, IsMobile and 14 or 16)
+			new("UIListLayout", {
+				Padding        = UDim.new(0, 6),
+				SortOrder      = Enum.SortOrder.LayoutOrder,
+				FillDirection  = Enum.FillDirection.Vertical,
+				Parent         = Card,
+			})
+
+			new("TextLabel", {
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 16 or 18),
+				BackgroundTransparency = 1,
+				Text                   = opts.Name,
+				TextColor3             = THEME.Text,
+				Font                   = Enum.Font.GothamBold,
+				TextSize               = IsMobile and 13 or 14,
+				TextXAlignment         = Enum.TextXAlignment.Left,
+				LayoutOrder            = 1,
+				Parent                 = Card,
+			})
+
+			local InputHolder = new("Frame", {
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 28 or 30),
+				BackgroundColor3       = THEME.SwitchOff,
+				BorderSizePixel        = 0,
+				LayoutOrder            = 2,
+				Parent                 = Card,
+			})
+			corner(8, InputHolder)
+			stroke(THEME.BorderSoft, 1, InputHolder, 0.88)
+
+			local Box = new("TextBox", {
+				Size                   = UDim2.new(1, -16, 1, 0),
+				Position               = UDim2.new(0, 8, 0, 0),
+				BackgroundTransparency = 1,
+				Text                   = opts.Default or "",
+				PlaceholderText        = opts.Placeholder or "",
+				TextColor3             = THEME.Text,
+				PlaceholderColor3      = THEME.SubText,
+				Font                   = Enum.Font.Gotham,
+				TextSize               = IsMobile and 13 or 14,
+				TextXAlignment         = Enum.TextXAlignment.Left,
+				ClearTextOnFocus       = false,
+				Parent                 = InputHolder,
+			})
+
+			if opts.Numeric then
+				Box:GetPropertyChangedSignal("Text"):Connect(function()
+					local t = Box.Text:gsub("[^%d%.%-]", "")
+					if Box.Text ~= t then Box.Text = t end
+				end)
+			end
+
+			Box.FocusLost:Connect(function()
+				task.spawn(cb, Box.Text)
+			end)
+
+			return {
+				GetValue = function() return Box.Text end,
+				SetValue = function(_, v: string) Box.Text = tostring(v or "") end,
+			}
+		end
+
+		-- ---------- DROPDOWN (single-select, expandable list) ----------
+		function TabObj:CreateDropdown(opts: {
+			Name: string,
+			Values: {string},
+			Default: string?,
+			Callback: ((string) -> ())?,
+		})
+			local cb      = opts.Callback or function() end
+			local values  = opts.Values or {}
+			local current = opts.Default
+
+			local Card = new("Frame", {
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 62 or 68),
+				BackgroundColor3       = THEME.Card,
+				BorderSizePixel        = 0,
+				LayoutOrder            = nextOrder(),
+				Parent                 = Page,
+				ClipsDescendants       = true,
+			})
+			corner(12, Card)
+			stroke(THEME.BorderSoft, 1, Card, 0.92)
+			padding(Card, IsMobile and 10 or 12, IsMobile and 10 or 12, IsMobile and 14 or 16, IsMobile and 14 or 16)
+			local list = new("UIListLayout", {
+				Padding        = UDim.new(0, 6),
+				SortOrder      = Enum.SortOrder.LayoutOrder,
+				FillDirection  = Enum.FillDirection.Vertical,
+				Parent         = Card,
+			})
+
+			new("TextLabel", {
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 16 or 18),
+				BackgroundTransparency = 1,
+				Text                   = opts.Name,
+				TextColor3             = THEME.Text,
+				Font                   = Enum.Font.GothamBold,
+				TextSize               = IsMobile and 13 or 14,
+				TextXAlignment         = Enum.TextXAlignment.Left,
+				LayoutOrder            = 1,
+				Parent                 = Card,
+			})
+
+			local Button = new("TextButton", {
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 28 or 30),
+				BackgroundColor3       = THEME.SwitchOff,
+				AutoButtonColor        = false,
+				BorderSizePixel        = 0,
+				Text                   = "",
+				LayoutOrder            = 2,
+				Parent                 = Card,
+			})
+			corner(8, Button)
+			stroke(THEME.BorderSoft, 1, Button, 0.88)
+
+			local Selected = new("TextLabel", {
+				Size                   = UDim2.new(1, -36, 1, 0),
+				Position               = UDim2.new(0, 10, 0, 0),
+				BackgroundTransparency = 1,
+				Text                   = current or "Select...",
+				TextColor3             = current and THEME.Text or THEME.SubText,
+				Font                   = Enum.Font.Gotham,
+				TextSize               = IsMobile and 13 or 14,
+				TextXAlignment         = Enum.TextXAlignment.Left,
+				TextTruncate           = Enum.TextTruncate.AtEnd,
+				Parent                 = Button,
+			})
+
+			local Chevron = new("TextLabel", {
+				Size                   = UDim2.fromOffset(20, 20),
+				Position               = UDim2.new(1, -24, 0.5, 0),
+				AnchorPoint            = Vector2.new(0, 0.5),
+				BackgroundTransparency = 1,
+				Text                   = "v",
+				TextColor3             = THEME.SubText,
+				Font                   = Enum.Font.GothamBold,
+				TextSize               = 12,
+				Parent                 = Button,
+			})
+
+			-- Scrollable list that expands inside the card
+			local ListBox = new("ScrollingFrame", {
+				Size                   = UDim2.new(1, 0, 0, 0),
+				BackgroundColor3       = THEME.SwitchOff,
+				BorderSizePixel        = 0,
+				ScrollBarThickness     = 2,
+				ScrollBarImageColor3   = Color3.fromRGB(120, 120, 125),
+				CanvasSize             = UDim2.new(0, 0, 0, 0),
+				AutomaticCanvasSize    = Enum.AutomaticSize.Y,
+				ScrollingDirection     = Enum.ScrollingDirection.Y,
+				LayoutOrder            = 3,
+				Visible                = false,
+				Parent                 = Card,
+			})
+			corner(8, ListBox)
+			stroke(THEME.BorderSoft, 1, ListBox, 0.88)
+			new("UIListLayout", {
+				Padding   = UDim.new(0, 2),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				Parent    = ListBox,
+			})
+			new("UIPadding", {
+				PaddingTop    = UDim.new(0, 4),
+				PaddingBottom = UDim.new(0, 4),
+				PaddingLeft   = UDim.new(0, 4),
+				PaddingRight  = UDim.new(0, 4),
+				Parent        = ListBox,
+			})
+
+			local open = false
+			local rowH = IsMobile and 26 or 28
+
+			local function collapsedHeight()
+				return IsMobile and 62 or 68
+			end
+			local function expandedHeight()
+				local visible = math.min(#values, 5)
+				return collapsedHeight() + 6 + (visible * (rowH + 2)) + 8
+			end
+
+			local function rebuildRows()
+				for _, child in ipairs(ListBox:GetChildren()) do
+					if child:IsA("TextButton") then child:Destroy() end
+				end
+				for i, v in ipairs(values) do
+					local row = new("TextButton", {
+						Size                   = UDim2.new(1, -4, 0, rowH),
+						BackgroundTransparency = 1,
+						AutoButtonColor        = false,
+						Text                   = tostring(v),
+						TextColor3             = THEME.Text,
+						Font                   = Enum.Font.Gotham,
+						TextSize               = IsMobile and 12 or 13,
+						TextXAlignment         = Enum.TextXAlignment.Left,
+						LayoutOrder            = i,
+						Parent                 = ListBox,
+					})
+					new("UIPadding", { PaddingLeft = UDim.new(0, 6), Parent = row })
+					row.MouseEnter:Connect(function()
+						row.BackgroundTransparency = 0.8
+						row.BackgroundColor3       = Color3.fromRGB(80, 80, 86)
+					end)
+					row.MouseLeave:Connect(function() row.BackgroundTransparency = 1 end)
+					row.MouseButton1Click:Connect(function()
+						current = tostring(v)
+						Selected.Text       = current
+						Selected.TextColor3 = THEME.Text
+						open = false
+						ListBox.Visible = false
+						Card.Size = UDim2.new(1, 0, 0, collapsedHeight())
+						Chevron.Rotation = 0
+						task.spawn(cb, current)
+					end)
+				end
+			end
+			rebuildRows()
+
+			Button.MouseButton1Click:Connect(function()
+				if #values == 0 then return end
+				open = not open
+				ListBox.Visible = open
+				if open then
+					Card.Size = UDim2.new(1, 0, 0, expandedHeight())
+					Chevron.Rotation = 180
+				else
+					Card.Size = UDim2.new(1, 0, 0, collapsedHeight())
+					Chevron.Rotation = 0
+				end
+			end)
+
+			return {
+				GetValue  = function() return current end,
+				SetValue  = function(_, v: string)
+					current = v
+					Selected.Text       = v or "Select..."
+					Selected.TextColor3 = (v and THEME.Text) or THEME.SubText
+				end,
+				SetValues = function(_, vs: {string})
+					values = vs or {}
+					rebuildRows()
+					if current and not table.find(values, current) then
+						current = nil
+						Selected.Text       = "Select..."
+						Selected.TextColor3 = THEME.SubText
+					end
+				end,
+			}
 		end
 
 		return TabObj
