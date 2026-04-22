@@ -536,19 +536,24 @@ function AsusLib:CreateWindow(title: string)
 		local vw, vh = viewport.X, viewport.Y
 		local w, h
 		if IsMobile then
-			-- Mobile: bigger on small phones (relative), capped on tablets
+			-- Mobile
 			if vw < 600 then
 				-- small portrait phone
 				w = math.clamp(vw * 0.92, 320, 560)
-				h = math.clamp(vh * 0.80, 260, 420)
+				h = math.clamp(vh * 0.80, 260, 440)
+			elseif vw < 1100 then
+				-- landscape phone / small tablet
+				w = math.clamp(vw * 0.62, 460, 720)
+				h = math.clamp(vh * 0.72, 300, 460)
 			else
-				-- landscape phone / tablet
-				w = math.clamp(vw * 0.68, 420, 640)
-				h = math.clamp(vh * 0.72, 280, 420)
+				-- tablet landscape
+				w = math.clamp(vw * 0.56, 560, 820)
+				h = math.clamp(vh * 0.68, 320, 500)
 			end
 		else
-			w = math.clamp(vw * 0.50, 560, 760)
-			h = math.clamp(vh * 0.65, 400, 520)
+			-- Desktop: proportional with generous cap for big monitors
+			w = math.clamp(vw * 0.48, 580, 840)
+			h = math.clamp(vh * 0.62, 400, 560)
 		end
 		return Vector2.new(math.floor(w), math.floor(h))
 	end
@@ -631,13 +636,16 @@ function AsusLib:CreateWindow(title: string)
 		Parent                 = Window,
 	})
 
-	-- Sidebar width scales a bit with window width on mobile
+	-- Sidebar width scales proportionally with the current window width
+	-- across mobile / tablet / desktop so the layout stays balanced.
 	local function computeSidebarWidth()
-		if not IsMobile then return 180 end
-		local viewport = (camera and camera.ViewportSize) or Vector2.new(800, 400)
-		if viewport.X < 500 then return 118 end
-		if viewport.X < 700 then return 128 end
-		return 140
+		local w = winW
+		if IsMobile then
+			-- Phones: compact sidebar, ~24% of the window, clamped.
+			return math.clamp(math.floor(w * 0.24), 118, 150)
+		end
+		-- Desktop / tablet: wider, ~26% of window, clamped.
+		return math.clamp(math.floor(w * 0.26), 160, 210)
 	end
 
 	local sidebarWidth = computeSidebarWidth()
@@ -686,8 +694,9 @@ function AsusLib:CreateWindow(title: string)
 	if camera then
 		camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 			local s = computeSize()
+			winW, winH = s.X, s.Y                        -- keep cached size current
 			tween(Window, 0.2, { Size = UDim2.fromOffset(s.X, s.Y) })
-			local newSidebar = computeSidebarWidth()
+			local newSidebar = computeSidebarWidth()     -- uses the fresh winW
 			tween(Sidebar, 0.2, { Size = UDim2.new(0, newSidebar, 1, 0) })
 			tween(Content, 0.2, {
 				Size     = UDim2.new(1, -newSidebar, 1, 0),
@@ -821,19 +830,19 @@ function AsusLib:CreateWindow(title: string)
 
 		new("TextLabel", {
 			Name                   = "Header",
-			Size                   = UDim2.new(1, 0, 0, IsMobile and 34 or 38),
+			Size                   = UDim2.new(1, 0, 0, IsMobile and 28 or 32),
 			BackgroundTransparency = 1,
 			Text                   = name,
 			TextColor3             = THEME.Text,
 			Font                   = Enum.Font.GothamBold,
-			TextSize               = IsMobile and 20 or 24,
+			TextSize               = IsMobile and 18 or 22,
 			TextXAlignment         = Enum.TextXAlignment.Left,
 			LayoutOrder            = 0,
 			Parent                 = Page,
 		})
 
 		new("UIListLayout", {
-			Padding   = UDim.new(0, IsMobile and 8 or 10),
+			Padding   = UDim.new(0, IsMobile and 6 or 8),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 			Parent    = Page,
 		})
@@ -878,7 +887,7 @@ function AsusLib:CreateWindow(title: string)
 		-- ---------- LABEL ----------
 		function TabObj:CreateLabel(text: string)
 			local Card = new("Frame", {
-				Size                   = UDim2.new(1, 0, 0, IsMobile and 44 or 50),
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 38 or 42),
 				BackgroundColor3       = THEME.Card,
 				BorderSizePixel        = 0,
 				LayoutOrder            = nextOrder(),
@@ -886,13 +895,13 @@ function AsusLib:CreateWindow(title: string)
 			})
 			corner(10, Card)
 			local tl = new("TextLabel", {
-				Size                   = UDim2.new(1, -32, 1, 0),
-				Position               = UDim2.new(0, 18, 0, 0),
+				Size                   = UDim2.new(1, -28, 1, 0),
+				Position               = UDim2.new(0, 14, 0, 0),
 				BackgroundTransparency = 1,
 				Text                   = text,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = IsMobile and 14 or 15,
+				TextSize               = IsMobile and 13 or 14,
 				TextXAlignment         = Enum.TextXAlignment.Left,
 				Parent                 = Card,
 			})
@@ -915,12 +924,14 @@ function AsusLib:CreateWindow(title: string)
 			local cb    = opts.Callback or function() end
 			local hasDesc = opts.Description and opts.Description ~= ""
 
-			-- Touch-friendly sizes. Mobile = larger for easier tapping, but still shadcn proportions.
+			-- shadcn Switch: w-11 h-6 (44x24) on desktop.
+			-- On mobile we only bump vertical size by 1px for easier tapping.
+			-- These are the EXACT compact proportions shown in the Asus Hub reference.
 			local swW, swH, thumbPad
 			if IsMobile then
-				swW, swH, thumbPad = 48, 28, 3
+				swW, swH, thumbPad = 40, 22, 2
 			else
-				swW, swH, thumbPad = 44, 24, 2
+				swW, swH, thumbPad = 36, 20, 2
 			end
 			local thumb = swH - (thumbPad * 2)
 
@@ -933,17 +944,17 @@ function AsusLib:CreateWindow(title: string)
 				LayoutOrder            = nextOrder(),
 				Parent                 = Page,
 			})
-			corner(12, Card)
+			corner(10, Card)
 			stroke(THEME.BorderSoft, 1, Card, 0.92)
-			padding(Card, IsMobile and 11 or 14, IsMobile and 11 or 14, IsMobile and 13 or 18, IsMobile and 13 or 18)
+			padding(Card, IsMobile and 9 or 11, IsMobile and 9 or 11, IsMobile and 12 or 14, IsMobile and 12 or 14)
 			new("UISizeConstraint", {
-				MinSize = Vector2.new(0, IsMobile and 48 or 54),
+				MinSize = Vector2.new(0, IsMobile and 40 or 44),
 				Parent  = Card,
 			})
 			glass(Card, 0.4)
 
 			-- Horizontal row layout: text grows, switch stays pinned right
-			local reserveRight = swW + 12
+			local reserveRight = swW + 10
 			local TextCol = new("Frame", {
 				Size                   = UDim2.new(1, -reserveRight, 0, 0),
 				AutomaticSize          = Enum.AutomaticSize.Y,
@@ -958,12 +969,12 @@ function AsusLib:CreateWindow(title: string)
 			})
 
 			new("TextLabel", {
-				Size                   = UDim2.new(1, 0, 0, IsMobile and 18 or 20),
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 16 or 18),
 				BackgroundTransparency = 1,
 				Text                   = opts.Name,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = IsMobile and 13 or 15,
+				TextSize               = IsMobile and 12 or 14,
 				TextXAlignment         = Enum.TextXAlignment.Left,
 				TextTruncate           = Enum.TextTruncate.AtEnd,
 				LayoutOrder            = 1,
@@ -978,7 +989,7 @@ function AsusLib:CreateWindow(title: string)
 					Text                   = opts.Description,
 					TextColor3             = THEME.SubText,
 					Font                   = Enum.Font.Gotham,
-					TextSize               = IsMobile and 11 or 12,
+					TextSize               = IsMobile and 10 or 11,
 					TextXAlignment         = Enum.TextXAlignment.Left,
 					TextYAlignment         = Enum.TextYAlignment.Top,
 					TextWrapped            = true,
@@ -1083,20 +1094,20 @@ function AsusLib:CreateWindow(title: string)
 				LayoutOrder            = nextOrder(),
 				Parent                 = Page,
 			})
-			corner(12, Card)
+			corner(10, Card)
 			stroke(THEME.BorderSoft, 1, Card, 0.92)
-			padding(Card, IsMobile and 12 or 14, IsMobile and 12 or 14, IsMobile and 14 or 18, IsMobile and 14 or 18)
+			padding(Card, IsMobile and 10 or 12, IsMobile and 10 or 12, IsMobile and 13 or 14, IsMobile and 13 or 14)
 			new("UISizeConstraint", {
-				MinSize = Vector2.new(0, IsMobile and 58 or 64),
+				MinSize = Vector2.new(0, IsMobile and 50 or 54),
 				Parent  = Card,
 			})
 			glass(Card, 0.4)
 
 			-- Layout: text column (left, auto-grows) | value label + track (right, fixed fraction)
-			-- The right section takes ~45% of card width on mobile, 42% on PC.
-			local rightFrac = IsMobile and 0.48 or 0.44
-			local trackThickness = 4
-			local knobPx = IsMobile and 18 or 16
+			-- The right section takes ~46% of card width on mobile, 42% on PC.
+			local rightFrac = IsMobile and 0.46 or 0.42
+			local trackThickness = 3
+			local knobPx = IsMobile and 14 or 12
 
 			-- Right container holds value number + track, vertically centered in the card
 			local RightCol = new("Frame", {
@@ -1109,16 +1120,16 @@ function AsusLib:CreateWindow(title: string)
 			})
 
 			-- Value label on the left of the right section
-			local valueLabelW = IsMobile and 34 or 38
+			local valueLabelW = IsMobile and 30 or 32
 			local ValueLabel = new("TextLabel", {
-				Size                   = UDim2.fromOffset(valueLabelW, 20),
+				Size                   = UDim2.fromOffset(valueLabelW, 18),
 				Position               = UDim2.new(0, 0, 0.5, 0),
 				AnchorPoint            = Vector2.new(0, 0.5),
 				BackgroundTransparency = 1,
 				Text                   = tostring(value),
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamMedium,
-				TextSize               = IsMobile and 13 or 14,
+				TextSize               = IsMobile and 12 or 13,
 				TextXAlignment         = Enum.TextXAlignment.Right,
 				Parent                 = RightCol,
 			})
@@ -1163,9 +1174,11 @@ function AsusLib:CreateWindow(title: string)
 			corner(math.floor(knobPx / 2), Knob)
 			stroke(Color3.fromRGB(0, 0, 0), 1, Knob, 0.85)
 
-			-- Invisible hit-pad over the thumb for easier dragging on mobile
+			-- Invisible hit-pad over the thumb for easier dragging on mobile.
+			-- Larger on mobile so shrinking the visible knob doesn't hurt tap accuracy.
+			local hitExpand = IsMobile and 22 or 14
 			local KnobHit = new("TextButton", {
-				Size                   = UDim2.fromOffset(knobPx + 16, knobPx + 16),
+				Size                   = UDim2.fromOffset(knobPx + hitExpand, knobPx + hitExpand),
 				Position               = UDim2.new(0.5, 0, 0.5, 0),
 				AnchorPoint            = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
@@ -1189,12 +1202,12 @@ function AsusLib:CreateWindow(title: string)
 			})
 
 			new("TextLabel", {
-				Size                   = UDim2.new(1, 0, 0, IsMobile and 18 or 20),
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 16 or 18),
 				BackgroundTransparency = 1,
 				Text                   = opts.Name,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = IsMobile and 13 or 15,
+				TextSize               = IsMobile and 12 or 14,
 				TextXAlignment         = Enum.TextXAlignment.Left,
 				TextTruncate           = Enum.TextTruncate.AtEnd,
 				LayoutOrder            = 1,
@@ -1208,7 +1221,7 @@ function AsusLib:CreateWindow(title: string)
 					Text                   = opts.Description,
 					TextColor3             = THEME.SubText,
 					Font                   = Enum.Font.Gotham,
-					TextSize               = IsMobile and 11 or 12,
+					TextSize               = IsMobile and 10 or 11,
 					TextXAlignment         = Enum.TextXAlignment.Left,
 					TextYAlignment         = Enum.TextYAlignment.Top,
 					TextWrapped            = true,
@@ -1260,7 +1273,7 @@ function AsusLib:CreateWindow(title: string)
 
 			local function beginDrag(input: InputObject)
 				activeInput = input
-				tween(Knob, 0.12, { Size = UDim2.fromOffset(knobPx + 4, knobPx + 4) })
+				tween(Knob, 0.12, { Size = UDim2.fromOffset(knobPx + 3, knobPx + 3) })
 				updateFromPos(input.Position.X)
 			end
 			local function endDrag()
@@ -1280,7 +1293,7 @@ function AsusLib:CreateWindow(title: string)
 				if input.UserInputType == Enum.UserInputType.MouseButton1
 				or input.UserInputType == Enum.UserInputType.Touch then
 					activeInput = input
-					tween(Knob, 0.12, { Size = UDim2.fromOffset(knobPx + 4, knobPx + 4) })
+					tween(Knob, 0.12, { Size = UDim2.fromOffset(knobPx + 3, knobPx + 3) })
 				end
 			end)
 
@@ -1304,8 +1317,16 @@ function AsusLib:CreateWindow(title: string)
 		-- ---------- BUTTON ----------
 		function TabObj:CreateButton(opts: { Name: string, Description: string?, Callback: (() -> ())? })
 			local cb = opts.Callback or function() end
+			local hasBtnDesc = opts.Description and opts.Description ~= ""
+			-- Compact row height matching shadcn Button: taller only if a description is shown.
+			local btnH
+			if hasBtnDesc then
+				btnH = IsMobile and 42 or 46
+			else
+				btnH = IsMobile and 34 or 36
+			end
 			local Card = new("TextButton", {
-				Size                   = UDim2.new(1, 0, 0, IsMobile and 46 or 50),
+				Size                   = UDim2.new(1, 0, 0, btnH),
 				BackgroundColor3       = THEME.Card,
 				AutoButtonColor        = false,
 				BorderSizePixel        = 0,
@@ -1317,20 +1338,21 @@ function AsusLib:CreateWindow(title: string)
 			stroke(THEME.BorderSoft, 1, Card, 0.92)
 
 			new("TextLabel", {
-				Size                   = UDim2.new(1, -32, 0, 20),
-				Position               = UDim2.new(0, 18, 0, 8),
+				Size                   = UDim2.new(1, -28, 0, hasBtnDesc and 18 or btnH),
+				Position               = UDim2.new(0, 14, 0, hasBtnDesc and 6 or 0),
 				BackgroundTransparency = 1,
 				Text                   = opts.Name,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = IsMobile and 14 or 15,
+				TextSize               = IsMobile and 13 or 14,
 				TextXAlignment         = Enum.TextXAlignment.Left,
+				TextYAlignment         = hasBtnDesc and Enum.TextYAlignment.Center or Enum.TextYAlignment.Center,
 				Parent                 = Card,
 			})
-			if opts.Description then
+			if hasBtnDesc then
 				new("TextLabel", {
-					Size                   = UDim2.new(1, -32, 0, 16),
-					Position               = UDim2.new(0, 18, 0, 26),
+					Size                   = UDim2.new(1, -28, 0, 14),
+					Position               = UDim2.new(0, 14, 0, 24),
 					BackgroundTransparency = 1,
 					Text                   = opts.Description,
 					TextColor3             = THEME.SubText,
