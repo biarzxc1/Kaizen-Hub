@@ -85,8 +85,12 @@ local function padding(parent: Instance, top: number, bottom: number, left: numb
 	return p
 end
 
-local function tween(inst: Instance, time: number, props: {[string]: any})
-	local t = TweenService:Create(inst, TweenInfo.new(time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props)
+local function tween(inst: Instance, time: number, props: {[string]: any}, style: Enum.EasingStyle?, dir: Enum.EasingDirection?)
+	local t = TweenService:Create(
+		inst,
+		TweenInfo.new(time, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out),
+		props
+	)
 	t:Play()
 	return t
 end
@@ -466,16 +470,23 @@ function AsusLib:CreateWindow(title: string)
 	})
 	table.insert(AsusLib._screens, ScreenGui)
 
-	-- Responsive sizing (smaller on mobile than before)
-	local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
-	local winW, winH
-	if IsMobile then
-		winW = math.min(viewport.X * 0.78, 640)
-		winH = math.min(viewport.Y * 0.72, 400)
-	else
-		winW = math.min(viewport.X * 0.55, 720)
-		winH = math.min(viewport.Y * 0.70, 480)
+	-- Responsive sizing — scales to viewport, auto-updates on rotation / resize
+	local camera = workspace.CurrentCamera
+	local function computeSize()
+		local viewport = (camera and camera.ViewportSize) or Vector2.new(1280, 720)
+		local w, h
+		if IsMobile then
+			-- Smaller on mobile: ~72% of viewport, capped so it never overflows
+			w = math.clamp(viewport.X * 0.72, 340, 600)
+			h = math.clamp(viewport.Y * 0.68, 260, 380)
+		else
+			w = math.clamp(viewport.X * 0.50, 560, 720)
+			h = math.clamp(viewport.Y * 0.65, 380, 480)
+		end
+		return Vector2.new(math.floor(w), math.floor(h))
 	end
+	local winSize = computeSize()
+	local winW, winH = winSize.X, winSize.Y
 
 	local Window = new("Frame", {
 		Name                   = "Window",
@@ -502,12 +513,13 @@ function AsusLib:CreateWindow(title: string)
 	local TitleLabel = new("TextLabel", {
 		Size                   = UDim2.new(1, -90, 1, 0),
 		BackgroundTransparency = 1,
-		Text                   = title or "Asus Hub",
+		Text                   = title or "Kaizen Hub",
 		TextColor3             = THEME.Text,
 		Font                   = Enum.Font.GothamBold,
-		TextSize               = 16,
+		TextSize               = IsMobile and 15 or 16,
 		TextXAlignment         = Enum.TextXAlignment.Left,
 		TextYAlignment         = Enum.TextYAlignment.Center,
+		TextTruncate           = Enum.TextTruncate.AtEnd,
 		Parent                 = TitleBar,
 	})
 
@@ -539,6 +551,14 @@ function AsusLib:CreateWindow(title: string)
 
 	makeDraggable(Window, TitleBar)
 
+	-- Keep the window sized to the viewport (handles rotation / resizing)
+	if camera then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			local s = computeSize()
+			tween(Window, 0.2, { Size = UDim2.fromOffset(s.X, s.Y) })
+		end)
+	end
+
 	-- ---------- BODY ----------
 	local Body = new("Frame", {
 		Size                   = UDim2.new(1, 0, 1, -46),
@@ -547,25 +567,38 @@ function AsusLib:CreateWindow(title: string)
 		Parent                 = Window,
 	})
 
-	-- Sidebar
-	local sidebarWidth = IsMobile and 140 or 180
+	-- Sidebar (scrollable — fits any number of tabs)
+	local sidebarWidth = IsMobile and 132 or 180
 	local Sidebar = new("Frame", {
 		Name                   = "Sidebar",
 		Size                   = UDim2.new(0, sidebarWidth, 1, 0),
 		BackgroundTransparency = 1,
 		Parent                 = Body,
 	})
-	padding(Sidebar, 4, 12, 10, 6)
+	padding(Sidebar, 6, 12, 8, 4)
 
-	local TabList = new("Frame", {
+	local TabList = new("ScrollingFrame", {
 		Size                   = UDim2.new(1, 0, 1, 0),
 		BackgroundTransparency = 1,
+		BorderSizePixel        = 0,
+		ScrollBarThickness     = 2,
+		ScrollBarImageColor3   = Color3.fromRGB(80, 80, 80),
+		ScrollBarImageTransparency = 0.4,
+		CanvasSize             = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize    = Enum.AutomaticSize.Y,
+		ScrollingDirection     = Enum.ScrollingDirection.Y,
+		ElasticBehavior        = Enum.ElasticBehavior.WhenScrollable,
 		Parent                 = Sidebar,
 	})
 	new("UIListLayout", {
 		Padding   = UDim.new(0, 4),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent    = TabList,
+	})
+	new("UIPadding", {
+		PaddingTop    = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 8),
+		Parent        = TabList,
 	})
 
 	-- Content
@@ -738,17 +771,26 @@ function AsusLib:CreateWindow(title: string)
 		local function select()
 			for _, t in ipairs(WindowObj.Tabs) do
 				t.page.Visible = false
-				t.label.TextColor3 = THEME.TabInactive
+				tween(t.label, 0.15, { TextColor3 = THEME.TabInactive })
 				recolorIcon(t.iconBox, t.iconName, THEME.TabInactive)
-				t.accent.BackgroundTransparency = 1
+				tween(t.accent, 0.15, { BackgroundTransparency = 1, Size = UDim2.fromOffset(3, 0) })
 			end
 			Page.Visible = true
-			label.TextColor3 = THEME.Text
+			tween(label, 0.15, { TextColor3 = THEME.Text })
 			recolorIcon(iconBox, iconName :: string, THEME.Text)
-			accent.BackgroundTransparency = 0
+			tween(accent, 0.2, { BackgroundTransparency = 0, Size = UDim2.fromOffset(3, 22) }, Enum.EasingStyle.Back)
 		end
 
 		click.MouseButton1Click:Connect(select)
+		-- Hover feedback on PC
+		if not IsMobile then
+			click.MouseEnter:Connect(function()
+				if not Page.Visible then tween(label, 0.12, { TextColor3 = Color3.fromRGB(220, 220, 220) }) end
+			end)
+			click.MouseLeave:Connect(function()
+				if not Page.Visible then tween(label, 0.15, { TextColor3 = THEME.TabInactive }) end
+			end)
+		end
 
 		table.insert(WindowObj.Tabs, {
 			page = Page, label = label, iconBox = iconBox,
@@ -826,24 +868,42 @@ function AsusLib:CreateWindow(title: string)
 				})
 			end
 
+			-- Responsive switch sizing (slightly bigger touch target on mobile)
+			local swW, swH = (IsMobile and 46 or 44), (IsMobile and 26 or 24)
+			local knobSize = swH - 6
 			local Switch = new("Frame", {
-				Size                   = UDim2.fromOffset(44, 24),
+				Size                   = UDim2.fromOffset(swW, swH),
 				Position               = UDim2.new(1, 0, 0.5, 0),
 				AnchorPoint            = Vector2.new(1, 0.5),
 				BackgroundColor3       = THEME.ToggleOff,
 				BorderSizePixel        = 0,
 				Parent                 = Card,
 			})
-			corner(12, Switch)
+			corner(math.floor(swH / 2), Switch)
+
+			-- White gradient that reveals when ON (the "white thing" from the screenshot).
+			-- We keep it invisible via Transparency when OFF and fade it in when ON.
+			local SwitchGradient = new("UIGradient", {
+				Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0,    Color3.fromRGB(255, 255, 255)),
+					ColorSequenceKeypoint.new(0.5,  Color3.fromRGB(240, 240, 240)),
+					ColorSequenceKeypoint.new(1,    Color3.fromRGB(210, 210, 210)),
+				}),
+				Rotation = 90,
+				Enabled  = false,
+				Parent   = Switch,
+			})
 
 			local Knob = new("Frame", {
-				Size                   = UDim2.fromOffset(18, 18),
+				Size                   = UDim2.fromOffset(knobSize, knobSize),
 				Position               = UDim2.fromOffset(3, 3),
 				BackgroundColor3       = Color3.fromRGB(255, 255, 255),
 				BorderSizePixel        = 0,
 				Parent                 = Switch,
 			})
-			corner(9, Knob)
+			corner(math.floor(knobSize / 2), Knob)
+			-- Subtle shadow on the knob for depth (matches the screenshot)
+			stroke(Color3.fromRGB(0, 0, 0), 1, Knob, 0.85)
 
 			local Btn = new("TextButton", {
 				Size                   = UDim2.new(1, 0, 1, 0),
@@ -853,22 +913,36 @@ function AsusLib:CreateWindow(title: string)
 				Parent                 = Card,
 			})
 
+			local knobOn  = UDim2.fromOffset(swW - knobSize - 3, 3)
+			local knobOff = UDim2.fromOffset(3, 3)
 			local function render(animated: boolean?)
-				local t = animated == false and 0 or 0.15
+				local t = animated == false and 0 or 0.18
 				if state then
+					SwitchGradient.Enabled = true
 					tween(Switch, t, { BackgroundColor3 = THEME.ToggleOn })
-					tween(Knob,   t, { Position = UDim2.fromOffset(23, 3), BackgroundColor3 = Color3.fromRGB(30, 30, 30) })
+					tween(Knob,   t, { Position = knobOn,  BackgroundColor3 = Color3.fromRGB(30, 30, 30) })
 				else
 					tween(Switch, t, { BackgroundColor3 = THEME.ToggleOff })
-					tween(Knob,   t, { Position = UDim2.fromOffset(3, 3),  BackgroundColor3 = Color3.fromRGB(255, 255, 255) })
+					tween(Knob,   t, { Position = knobOff, BackgroundColor3 = Color3.fromRGB(255, 255, 255) })
+					task.delay(t, function()
+						if not state then SwitchGradient.Enabled = false end
+					end)
 				end
 			end
 
 			Btn.MouseButton1Click:Connect(function()
 				state = not state
+				-- quick knob squash for tactile feedback
+				tween(Knob, 0.08, { Size = UDim2.fromOffset(knobSize + 4, knobSize) })
+				task.delay(0.08, function()
+					tween(Knob, 0.12, { Size = UDim2.fromOffset(knobSize, knobSize) })
+				end)
 				render(true)
 				task.spawn(cb, state)
 			end)
+			-- Subtle card hover on desktop
+			Card.MouseEnter:Connect(function() tween(Card, 0.12, { BackgroundColor3 = THEME.CardHover }) end)
+			Card.MouseLeave:Connect(function() tween(Card, 0.15, { BackgroundColor3 = THEME.Card }) end)
 			render(false)
 
 			return {
@@ -920,15 +994,17 @@ function AsusLib:CreateWindow(title: string)
 			})
 			corner(2, Fill)
 
+			local knobPx = IsMobile and 18 or 14
 			local Knob = new("Frame", {
-				Size                   = UDim2.fromOffset(14, 14),
+				Size                   = UDim2.fromOffset(knobPx, knobPx),
 				Position               = UDim2.new(0, 0, 0.5, 0),
 				AnchorPoint            = Vector2.new(0.5, 0.5),
 				BackgroundColor3       = THEME.Accent,
 				BorderSizePixel        = 0,
 				Parent                 = Track,
 			})
-			corner(7, Knob)
+			corner(math.floor(knobPx / 2), Knob)
+			stroke(Color3.fromRGB(0, 0, 0), 1, Knob, 0.85)
 
 			local ValueLabel = new("TextLabel", {
 				Size                   = UDim2.fromOffset(46, 20),
