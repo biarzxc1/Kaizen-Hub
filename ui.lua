@@ -35,18 +35,29 @@ local IsMobile    = UserInputService.TouchEnabled and not UserInputService.Keybo
 -- THEME (matches the reference screenshots)
 -- ==========================================================================
 local THEME = {
-	Window       = Color3.fromRGB(20, 20, 20),   -- deep solid dark
-	Sidebar      = Color3.fromRGB(20, 20, 20),
-	Card         = Color3.fromRGB(40, 40, 40),   -- card surface
-	CardHover    = Color3.fromRGB(50, 50, 50),
-	Accent       = Color3.fromRGB(255, 255, 255),-- the white "thing" (selection bar + on-toggle)
-	Text         = Color3.fromRGB(255, 255, 255),
-	SubText      = Color3.fromRGB(170, 170, 170),
-	TabInactive  = Color3.fromRGB(175, 175, 175),
-	ToggleOff    = Color3.fromRGB(60, 60, 60),
-	ToggleOn     = Color3.fromRGB(255, 255, 255),
-	Border       = Color3.fromRGB(45, 45, 45),
-	Toast        = Color3.fromRGB(28, 28, 28),
+	-- Glassmorphism dark theme (inspired by Asus Hub + shadcn/ui)
+	Window            = Color3.fromRGB(14, 14, 16),   -- deep base
+	WindowTransparency = 0.08,                         -- slight see-through for glass feel
+	Sidebar           = Color3.fromRGB(16, 16, 18),
+	SidebarTransparency = 0.05,
+	Card              = Color3.fromRGB(32, 32, 36),
+	CardTransparency  = 0.15,                          -- translucent cards
+	CardHover         = Color3.fromRGB(44, 44, 50),
+	Accent            = Color3.fromRGB(255, 255, 255),
+	Text              = Color3.fromRGB(245, 245, 247),
+	SubText           = Color3.fromRGB(161, 161, 170), -- shadcn muted-foreground
+	TabInactive       = Color3.fromRGB(161, 161, 170),
+	-- shadcn switch colors (dark mode)
+	SwitchOff         = Color3.fromRGB(39, 39, 42),    -- input
+	SwitchOn          = Color3.fromRGB(250, 250, 250), -- primary
+	ThumbLight        = Color3.fromRGB(255, 255, 255),
+	ThumbDark         = Color3.fromRGB(10, 10, 10),
+	-- Legacy aliases (kept for slider track compatibility)
+	ToggleOff         = Color3.fromRGB(39, 39, 42),
+	ToggleOn          = Color3.fromRGB(250, 250, 250),
+	Border            = Color3.fromRGB(63, 63, 70),    -- shadcn border
+	BorderSoft        = Color3.fromRGB(255, 255, 255),
+	Toast             = Color3.fromRGB(24, 24, 27),
 }
 
 -- ==========================================================================
@@ -75,6 +86,44 @@ local function stroke(color: Color3, thickness: number, parent: Instance, transp
 	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	s.Parent = parent
 	return s
+end
+
+-- Apply a glassmorphism effect: translucent bg + soft top-to-bottom highlight gradient
+-- + subtle inner border. Roblox GUIs can't blur, so this simulates frosted glass.
+local function glass(parent: GuiObject, intensity: number?)
+	intensity = intensity or 1
+	-- Top highlight gradient (lighter at top, darker at bottom) - gives a "lit" look
+	local g = Instance.new("UIGradient")
+	g.Rotation = 90
+	g.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0,    0.55 - 0.15 * intensity),
+		NumberSequenceKeypoint.new(0.5,  0.8),
+		NumberSequenceKeypoint.new(1,    0.9),
+	})
+	g.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+	})
+	-- We parent to a separate overlay frame so it doesn't tint the bg color
+	local overlay = Instance.new("Frame")
+	overlay.Name = "GlassHighlight"
+	overlay.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	overlay.BackgroundTransparency = 0.92
+	overlay.BorderSizePixel = 0
+	overlay.Size = UDim2.new(1, 0, 1, 0)
+	overlay.ZIndex = (parent.ZIndex or 1)
+	overlay.Parent = parent
+	g.Parent = overlay
+	-- Match parent corner radius if present
+	for _, child in ipairs(parent:GetChildren()) do
+		if child:IsA("UICorner") then
+			local c = Instance.new("UICorner")
+			c.CornerRadius = child.CornerRadius
+			c.Parent = overlay
+			break
+		end
+	end
+	return overlay
 end
 
 local function padding(parent: Instance, top: number, bottom: number, left: number, right: number)
@@ -496,12 +545,15 @@ function AsusLib:CreateWindow(title: string)
 		Position               = UDim2.new(0.5, 0, 0.5, 0),
 		AnchorPoint            = Vector2.new(0.5, 0.5),
 		BackgroundColor3       = THEME.Window,
+		BackgroundTransparency = THEME.WindowTransparency,
 		BorderSizePixel        = 0,
 		ClipsDescendants       = true,
 		Parent                 = ScreenGui,
 	})
-	corner(14, Window)
-	stroke(THEME.Border, 1, Window, 0.35)
+	corner(16, Window)
+	-- Soft outer glow border (glass edge)
+	stroke(THEME.BorderSoft, 1, Window, 0.85)
+	glass(Window, 0.6)
 
 	-- ---------- TITLE BAR ----------
 	local TitleBar = new("Frame", {
@@ -839,16 +891,19 @@ function AsusLib:CreateWindow(title: string)
 				Size                   = UDim2.new(1, 0, 0, 0),
 				AutomaticSize          = Enum.AutomaticSize.Y,
 				BackgroundColor3       = THEME.Card,
+				BackgroundTransparency = THEME.CardTransparency,
 				BorderSizePixel        = 0,
 				LayoutOrder            = nextOrder(),
 				Parent                 = Page,
 			})
-			corner(10, Card)
+			corner(12, Card)
+			stroke(THEME.BorderSoft, 1, Card, 0.92)
 			padding(Card, IsMobile and 12 or 14, IsMobile and 12 or 14, IsMobile and 14 or 18, IsMobile and 14 or 18)
 			new("UISizeConstraint", {
 				MinSize = Vector2.new(0, IsMobile and 48 or 54),
 				Parent  = Card,
 			})
+			glass(Card, 0.4)
 
 			-- Reserve space on the right for the switch; text column fills the rest
 			local reserveRight = IsMobile and 58 or 64
@@ -895,42 +950,48 @@ function AsusLib:CreateWindow(title: string)
 				Desc.Name = "Description"
 			end
 
-			-- Switch (right side, always vertically centered)
-			local swW, swH = (IsMobile and 44 or 46), (IsMobile and 24 or 26)
-			local knobSize = swH - 6
+			-- ======================================================
+			-- SHADCN/UI Switch (flat, minimal, pill track + circle thumb)
+			-- Track: w-11 h-6 (44x24)  |  Thumb: h-5 w-5 (20x20)
+			-- OFF: dark muted track, white thumb
+			-- ON : white track, dark thumb
+			-- ======================================================
+			local swW   = IsMobile and 46 or 44
+			local swH   = IsMobile and 26 or 24
+			local thumb = swH - 4   -- shadcn thumb = track height - 4px padding
+
 			local Switch = new("Frame", {
 				Size                   = UDim2.fromOffset(swW, swH),
 				Position               = UDim2.new(1, 0, 0.5, 0),
 				AnchorPoint            = Vector2.new(1, 0.5),
-				BackgroundColor3       = THEME.ToggleOff,
+				BackgroundColor3       = THEME.SwitchOff,
+				BackgroundTransparency = 0,
 				BorderSizePixel        = 0,
 				Parent                 = Card,
 			})
 			corner(math.floor(swH / 2), Switch)
-
-			-- White gradient that reveals when ON (the "white thing" from the screenshot).
-			-- We keep it invisible via Transparency when OFF and fade it in when ON.
-			local SwitchGradient = new("UIGradient", {
-				Color = ColorSequence.new({
-					ColorSequenceKeypoint.new(0,    Color3.fromRGB(255, 255, 255)),
-					ColorSequenceKeypoint.new(0.5,  Color3.fromRGB(240, 240, 240)),
-					ColorSequenceKeypoint.new(1,    Color3.fromRGB(210, 210, 210)),
-				}),
-				Rotation = 90,
-				Enabled  = false,
-				Parent   = Switch,
-			})
+			-- Shadcn has a subtle ring border on the switch
+			local SwitchStroke = stroke(THEME.Border, 1, Switch, 0.4)
 
 			local Knob = new("Frame", {
-				Size                   = UDim2.fromOffset(knobSize, knobSize),
-				Position               = UDim2.fromOffset(3, 3),
-				BackgroundColor3       = Color3.fromRGB(255, 255, 255),
+				Size                   = UDim2.fromOffset(thumb, thumb),
+				Position               = UDim2.fromOffset(2, 2),
+				BackgroundColor3       = THEME.ThumbLight,
 				BorderSizePixel        = 0,
 				Parent                 = Switch,
 			})
-			corner(math.floor(knobSize / 2), Knob)
-			-- Subtle shadow on the knob for depth (matches the screenshot)
-			stroke(Color3.fromRGB(0, 0, 0), 1, Knob, 0.85)
+			corner(math.floor(thumb / 2), Knob)
+			-- Soft drop shadow (shadcn-like) via a second frame beneath the knob
+			local KnobShadow = new("Frame", {
+				Size                   = UDim2.new(1, 2, 1, 2),
+				Position               = UDim2.fromOffset(-1, 0),
+				BackgroundColor3       = Color3.fromRGB(0, 0, 0),
+				BackgroundTransparency = 0.75,
+				BorderSizePixel        = 0,
+				ZIndex                 = Knob.ZIndex - 1,
+				Parent                 = Switch,
+			})
+			corner(math.floor(thumb / 2), KnobShadow)
 
 			local Btn = new("TextButton", {
 				Size                   = UDim2.new(1, 0, 1, 0),
@@ -940,30 +1001,29 @@ function AsusLib:CreateWindow(title: string)
 				Parent                 = Card,
 			})
 
-			local knobOn  = UDim2.fromOffset(swW - knobSize - 3, 3)
-			local knobOff = UDim2.fromOffset(3, 3)
+			local knobOn    = UDim2.fromOffset(swW - thumb - 2, 2)
+			local knobOff   = UDim2.fromOffset(2, 2)
+			local shadowOn  = UDim2.fromOffset(swW - thumb - 3, 0)
+			local shadowOff = UDim2.fromOffset(-1, 0)
+
 			local function render(animated: boolean?)
-				local t = animated == false and 0 or 0.18
+				local t = animated == false and 0 or 0.2
 				if state then
-					SwitchGradient.Enabled = true
-					tween(Switch, t, { BackgroundColor3 = THEME.ToggleOn })
-					tween(Knob,   t, { Position = knobOn,  BackgroundColor3 = Color3.fromRGB(30, 30, 30) })
+					tween(Switch,     t, { BackgroundColor3 = THEME.SwitchOn })
+					tween(SwitchStroke, t, { Transparency = 1 })
+					tween(Knob,       t, { Position = knobOn,   BackgroundColor3 = THEME.ThumbDark })
+					tween(KnobShadow, t, { Position = shadowOn, BackgroundTransparency = 0.65 })
 				else
-					tween(Switch, t, { BackgroundColor3 = THEME.ToggleOff })
-					tween(Knob,   t, { Position = knobOff, BackgroundColor3 = Color3.fromRGB(255, 255, 255) })
-					task.delay(t, function()
-						if not state then SwitchGradient.Enabled = false end
-					end)
+					tween(Switch,     t, { BackgroundColor3 = THEME.SwitchOff })
+					tween(SwitchStroke, t, { Transparency = 0.4 })
+					tween(Knob,       t, { Position = knobOff,   BackgroundColor3 = THEME.ThumbLight })
+					tween(KnobShadow, t, { Position = shadowOff, BackgroundTransparency = 0.75 })
 				end
 			end
 
 			Btn.MouseButton1Click:Connect(function()
 				state = not state
-				-- quick knob squash for tactile feedback
-				tween(Knob, 0.08, { Size = UDim2.fromOffset(knobSize + 4, knobSize) })
-				task.delay(0.08, function()
-					tween(Knob, 0.12, { Size = UDim2.fromOffset(knobSize, knobSize) })
-				end)
+				-- Shadcn doesn't squash, it uses a clean linear/ease-out slide.
 				render(true)
 				task.spawn(cb, state)
 			end)
@@ -995,16 +1055,19 @@ function AsusLib:CreateWindow(title: string)
 				Size                   = UDim2.new(1, 0, 0, 0),
 				AutomaticSize          = Enum.AutomaticSize.Y,
 				BackgroundColor3       = THEME.Card,
+				BackgroundTransparency = THEME.CardTransparency,
 				BorderSizePixel        = 0,
 				LayoutOrder            = nextOrder(),
 				Parent                 = Page,
 			})
-			corner(10, Card)
+			corner(12, Card)
+			stroke(THEME.BorderSoft, 1, Card, 0.92)
 			padding(Card, IsMobile and 12 or 14, IsMobile and 12 or 14, IsMobile and 14 or 18, IsMobile and 14 or 18)
 			new("UISizeConstraint", {
 				MinSize = Vector2.new(0, IsMobile and 56 or 62),
 				Parent  = Card,
 			})
+			glass(Card, 0.4)
 
 			-- Track is a fraction of card width; much more responsive than fixed px
 			local trackFrac = IsMobile and 0.40 or 0.38
