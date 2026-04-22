@@ -1,21 +1,23 @@
 --!strict
 --[[
-	AsusLib - Roblox UI Library (v3)
-	- Responsive: scales cleanly on mobile + PC
+	Kaizen Hub - Roblox UI Library (inspired by Asus Hub)
+	- Fully responsive: scales cleanly on mobile + PC, re-lays-out on rotation
 	- Solid dark theme matching the reference design
 	- Real frame-drawn icons (no asset IDs, always render)
+	- White-gradient toggles, smooth tween animations
+	- Scrollable sidebar + scrollable tab pages
 	- Notification system (top-right toasts)
 	- K to toggle visibility on PC, floating circle to restore on mobile
 	- Clicking minimize (-) hides the window and shows a toast
 
 	USAGE:
-		local AsusLib = loadstring(game:HttpGet("YOUR_URL/AsusLib.lua"))()
-		local Window  = AsusLib:CreateWindow("Asus Hub | Game | Delta")
+		local Kaizen  = loadstring(game:HttpGet("https://raw.githubusercontent.com/biarzxc1/Kaizen-Hub/refs/heads/main/ui.lua"))()
+		local Window  = Kaizen:CreateWindow("Kaizen Hub | Game | Delta")
 		local Visuals = Window:CreateTab("Visuals", "eye")
 		Visuals:CreateLabel("Esp all Crates in map")
-		Visuals:CreateToggle({ Name="Esp Crates", Description="View all crates.", Default=false, Callback=function(v) end })
-		Visuals:CreateSlider({ Name="Range (studs)", Description="Detection radius.", Min=0, Max=100, Default=30, Callback=function(v) end })
-		AsusLib:Notify({ Title = "Loaded", Text = "Welcome to Asus Hub" })
+		Visuals:CreateToggle({ Name="Esp Crates", Default=false, Callback=function(v) end })
+		Visuals:CreateSlider({ Name="Range (studs)", Min=0, Max=100, Default=30, Callback=function(v) end })
+		Kaizen:Notify({ Title = "Loaded", Text = "Welcome to Kaizen Hub" })
 
 	Icons: eye, swords, users, basket, settings, x, minus, home, bell
 --]]
@@ -831,45 +833,70 @@ function AsusLib:CreateWindow(title: string)
 			local cb    = opts.Callback or function() end
 
 			local hasDesc = opts.Description and opts.Description ~= ""
-			local cardH   = hasDesc and 70 or 54
 
+			-- Card auto-grows with description; switch is vertically centered via anchor
 			local Card = new("Frame", {
-				Size                   = UDim2.new(1, 0, 0, cardH),
+				Size                   = UDim2.new(1, 0, 0, 0),
+				AutomaticSize          = Enum.AutomaticSize.Y,
 				BackgroundColor3       = THEME.Card,
 				BorderSizePixel        = 0,
 				LayoutOrder            = nextOrder(),
 				Parent                 = Page,
 			})
 			corner(10, Card)
-			padding(Card, 12, 12, 18, 16)
+			padding(Card, IsMobile and 12 or 14, IsMobile and 12 or 14, IsMobile and 14 or 18, IsMobile and 14 or 18)
+			new("UISizeConstraint", {
+				MinSize = Vector2.new(0, IsMobile and 48 or 54),
+				Parent  = Card,
+			})
+
+			-- Reserve space on the right for the switch; text column fills the rest
+			local reserveRight = IsMobile and 58 or 64
+			local TextCol = new("Frame", {
+				Size                   = UDim2.new(1, -reserveRight, 0, 0),
+				AutomaticSize          = Enum.AutomaticSize.Y,
+				BackgroundTransparency = 1,
+				Parent                 = Card,
+			})
+			new("UIListLayout", {
+				Padding        = UDim.new(0, 4),
+				SortOrder      = Enum.SortOrder.LayoutOrder,
+				FillDirection  = Enum.FillDirection.Vertical,
+				Parent         = TextCol,
+			})
 
 			new("TextLabel", {
-				Size                   = UDim2.new(1, -64, 0, 20),
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 18 or 20),
 				BackgroundTransparency = 1,
 				Text                   = opts.Name,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = 15,
+				TextSize               = IsMobile and 14 or 15,
 				TextXAlignment         = Enum.TextXAlignment.Left,
-				Parent                 = Card,
+				TextTruncate           = Enum.TextTruncate.AtEnd,
+				LayoutOrder            = 1,
+				Parent                 = TextCol,
 			})
 			if hasDesc then
-				new("TextLabel", {
-					Position               = UDim2.new(0, 0, 0, 22),
-					Size                   = UDim2.new(1, -64, 0, 18),
+				local Desc = new("TextLabel", {
+					Size                   = UDim2.new(1, 0, 0, 0),
+					AutomaticSize          = Enum.AutomaticSize.Y,
 					BackgroundTransparency = 1,
 					Text                   = opts.Description,
 					TextColor3             = THEME.SubText,
 					Font                   = Enum.Font.Gotham,
-					TextSize               = 12,
+					TextSize               = IsMobile and 11 or 12,
 					TextXAlignment         = Enum.TextXAlignment.Left,
+					TextYAlignment         = Enum.TextYAlignment.Top,
 					TextWrapped            = true,
-					Parent                 = Card,
+					LayoutOrder            = 2,
+					Parent                 = TextCol,
 				})
+				Desc.Name = "Description"
 			end
 
-			-- Responsive switch sizing (slightly bigger touch target on mobile)
-			local swW, swH = (IsMobile and 46 or 44), (IsMobile and 26 or 24)
+			-- Switch (right side, always vertically centered)
+			local swW, swH = (IsMobile and 44 or 46), (IsMobile and 24 or 26)
 			local knobSize = swH - 6
 			local Switch = new("Frame", {
 				Size                   = UDim2.fromOffset(swW, swH),
@@ -963,26 +990,37 @@ function AsusLib:CreateWindow(title: string)
 			local cb    = opts.Callback or function() end
 
 			local hasDesc = opts.Description and opts.Description ~= ""
-			local cardH   = hasDesc and 82 or 62
 
 			local Card = new("Frame", {
-				Size                   = UDim2.new(1, 0, 0, cardH),
+				Size                   = UDim2.new(1, 0, 0, 0),
+				AutomaticSize          = Enum.AutomaticSize.Y,
 				BackgroundColor3       = THEME.Card,
 				BorderSizePixel        = 0,
 				LayoutOrder            = nextOrder(),
 				Parent                 = Page,
 			})
 			corner(10, Card)
-			padding(Card, 12, 12, 18, 16)
+			padding(Card, IsMobile and 12 or 14, IsMobile and 12 or 14, IsMobile and 14 or 18, IsMobile and 14 or 18)
+			new("UISizeConstraint", {
+				MinSize = Vector2.new(0, IsMobile and 56 or 62),
+				Parent  = Card,
+			})
 
-			local trackWidth = IsMobile and 110 or 140
+			-- Track is a fraction of card width; much more responsive than fixed px
+			local trackFrac = IsMobile and 0.40 or 0.38
+			local trackMinPx = 100
 			local Track = new("Frame", {
-				Size                   = UDim2.fromOffset(trackWidth, 4),
-				Position               = UDim2.new(1, 0, 0, 12),
+				Size                   = UDim2.new(trackFrac, 0, 0, 4),
+				Position               = UDim2.new(1, 0, 0, IsMobile and 12 or 14),
 				AnchorPoint            = Vector2.new(1, 0),
 				BackgroundColor3       = THEME.ToggleOff,
 				BorderSizePixel        = 0,
 				Parent                 = Card,
+			})
+			new("UISizeConstraint", {
+				MinSize = Vector2.new(trackMinPx, 4),
+				MaxSize = Vector2.new(180, 4),
+				Parent  = Track,
 			})
 			corner(2, Track)
 
@@ -1006,43 +1044,61 @@ function AsusLib:CreateWindow(title: string)
 			corner(math.floor(knobPx / 2), Knob)
 			stroke(Color3.fromRGB(0, 0, 0), 1, Knob, 0.85)
 
+			-- Value label sits just to the LEFT of the track (screenshot: "30" before bar)
 			local ValueLabel = new("TextLabel", {
-				Size                   = UDim2.fromOffset(46, 20),
-				Position               = UDim2.new(1, -trackWidth - 10, 0, 4),
-				AnchorPoint            = Vector2.new(1, 0),
+				Size                   = UDim2.fromOffset(44, 20),
+				AnchorPoint            = Vector2.new(1, 0.5),
+				Position               = UDim2.new(1 - trackFrac, -6, 0, (IsMobile and 12 or 14) + 2),
 				BackgroundTransparency = 1,
 				Text                   = tostring(value),
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamMedium,
-				TextSize               = 14,
+				TextSize               = IsMobile and 13 or 14,
 				TextXAlignment         = Enum.TextXAlignment.Right,
 				Parent                 = Card,
 			})
 
+			-- Text column: title + optional description, reserves space for track+value on the right
+			local TextCol = new("Frame", {
+				Size                   = UDim2.new(1 - trackFrac, -12, 0, 0),
+				AutomaticSize          = Enum.AutomaticSize.Y,
+				BackgroundTransparency = 1,
+				Parent                 = Card,
+			})
+			new("UIListLayout", {
+				Padding       = UDim.new(0, 4),
+				SortOrder     = Enum.SortOrder.LayoutOrder,
+				FillDirection = Enum.FillDirection.Vertical,
+				Parent        = TextCol,
+			})
+
 			new("TextLabel", {
-				Size                   = UDim2.new(1, -trackWidth - 60, 0, 20),
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 18 or 20),
 				BackgroundTransparency = 1,
 				Text                   = opts.Name,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = 15,
+				TextSize               = IsMobile and 14 or 15,
 				TextXAlignment         = Enum.TextXAlignment.Left,
-				Parent                 = Card,
+				TextTruncate           = Enum.TextTruncate.AtEnd,
+				LayoutOrder            = 1,
+				Parent                 = TextCol,
 			})
 
 			if hasDesc then
 				new("TextLabel", {
-					Position               = UDim2.new(0, 0, 0, 24),
-					Size                   = UDim2.new(1, -trackWidth - 60, 0, 28),
+					Size                   = UDim2.new(1, 0, 0, 0),
+					AutomaticSize          = Enum.AutomaticSize.Y,
 					BackgroundTransparency = 1,
 					Text                   = opts.Description,
 					TextColor3             = THEME.SubText,
 					Font                   = Enum.Font.Gotham,
-					TextSize               = 12,
+					TextSize               = IsMobile and 11 or 12,
 					TextXAlignment         = Enum.TextXAlignment.Left,
 					TextYAlignment         = Enum.TextYAlignment.Top,
 					TextWrapped            = true,
-					Parent                 = Card,
+					LayoutOrder            = 2,
+					Parent                 = TextCol,
 				})
 			end
 
