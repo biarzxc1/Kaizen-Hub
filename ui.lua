@@ -826,23 +826,28 @@ function AsusLib:CreateWindow(title: string)
 			Visible                = false,
 			Parent                 = Content,
 		})
-		padding(Page, 0, 14, 0, 8)
+		-- Responsive horizontal padding so cards don't touch the sidebar
+		-- edge or scrollbar. Top breathes so the page header isn't flush.
+		-- top, bottom, left, right
+		local pageSideX  = IsMobile and 12 or 16
+		local pageSideY  = IsMobile and 10 or 12
+		padding(Page, pageSideY, pageSideY + 4, pageSideX, pageSideX)
 
 		new("TextLabel", {
 			Name                   = "Header",
-			Size                   = UDim2.new(1, 0, 0, IsMobile and 28 or 32),
+			Size                   = UDim2.new(1, 0, 0, IsMobile and 30 or 34),
 			BackgroundTransparency = 1,
 			Text                   = name,
 			TextColor3             = THEME.Text,
 			Font                   = Enum.Font.GothamBold,
-			TextSize               = IsMobile and 18 or 22,
+			TextSize               = IsMobile and 20 or 24,
 			TextXAlignment         = Enum.TextXAlignment.Left,
 			LayoutOrder            = 0,
 			Parent                 = Page,
 		})
 
 		new("UIListLayout", {
-			Padding   = UDim.new(0, IsMobile and 6 or 8),
+			Padding   = UDim.new(0, IsMobile and 8 or 10),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 			Parent    = Page,
 		})
@@ -887,21 +892,21 @@ function AsusLib:CreateWindow(title: string)
 		-- ---------- LABEL (card-style) ----------
 		function TabObj:CreateLabel(text: string)
 			local Card = new("Frame", {
-				Size                   = UDim2.new(1, 0, 0, IsMobile and 34 or 38),
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 40 or 44),
 				BackgroundColor3       = THEME.Card,
 				BorderSizePixel        = 0,
 				LayoutOrder            = nextOrder(),
 				Parent                 = Page,
 			})
-			corner(10, Card)
+			corner(12, Card)
 			local tl = new("TextLabel", {
-				Size                   = UDim2.new(1, -24, 1, 0),
-				Position               = UDim2.new(0, 12, 0, 0),
+				Size                   = UDim2.new(1, -32, 1, 0),
+				Position               = UDim2.new(0, 16, 0, 0),
 				BackgroundTransparency = 1,
 				Text                   = text,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = IsMobile and 12 or 13,
+				TextSize               = IsMobile and 14 or 15,
 				TextXAlignment         = Enum.TextXAlignment.Left,
 				Parent                 = Card,
 			})
@@ -909,54 +914,55 @@ function AsusLib:CreateWindow(title: string)
 		end
 
 		-- ---------- SECTION (group heading with divider rule) ----------
-		-- Matches the "Item ESP" look: small bold label above a thin hairline
-		-- that spans the full content width. Purely structural — no card bg.
+		-- Matches the Asus Hub "Item ESP" look: small bold label with a
+		-- very light (~20% opacity white) hairline directly under it.
 		function TabObj:CreateSection(text: string)
 			local Holder = new("Frame", {
-				Size                   = UDim2.new(1, 0, 0, IsMobile and 26 or 28),
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 30 or 34),
 				BackgroundTransparency = 1,
 				LayoutOrder            = nextOrder(),
 				Parent                 = Page,
 			})
 			-- Small top spacer so sections feel separated from the card above
 			new("UIPadding", {
-				PaddingTop    = UDim.new(0, IsMobile and 6 or 8),
+				PaddingTop    = UDim.new(0, IsMobile and 8 or 10),
 				PaddingBottom = UDim.new(0, 0),
 				Parent        = Holder,
 			})
 
 			local tl = new("TextLabel", {
-				Size                   = UDim2.new(1, 0, 1, -5),
+				Size                   = UDim2.new(1, 0, 1, -6),
 				Position               = UDim2.fromOffset(0, 0),
 				BackgroundTransparency = 1,
 				Text                   = text,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = IsMobile and 12 or 13,
+				TextSize               = IsMobile and 14 or 15,
 				TextXAlignment         = Enum.TextXAlignment.Left,
 				TextYAlignment         = Enum.TextYAlignment.Center,
 				Parent                 = Holder,
 			})
 
-			-- Hairline divider pinned to the bottom
+			-- Hairline divider pinned to the bottom. Uses a very light white
+			-- (0.80 transparency) so it reads as a soft line, not a bar.
 			local Rule = new("Frame", {
 				AnchorPoint            = Vector2.new(0, 1),
 				Position               = UDim2.new(0, 0, 1, 0),
 				Size                   = UDim2.new(1, 0, 0, 1),
-				BackgroundColor3       = THEME.Text,
-				BackgroundTransparency = 0.86,
+				BackgroundColor3       = Color3.fromRGB(255, 255, 255),
+				BackgroundTransparency = 0.80,
 				BorderSizePixel        = 0,
 				Parent                 = Holder,
 			})
 
 			return {
-				SetText = function(_, s: string) tl.Text = s end,
+				SetText  = function(_, s: string) tl.Text = s end,
 				Instance = Holder,
 				Rule     = Rule,
 			}
 		end
 
-		-- ---------- DIVIDER (hairline only, no label) ----------
+		-- ---------- DIVIDER (standalone hairline, no label) ----------
 		function TabObj:CreateDivider()
 			local Holder = new("Frame", {
 				Size                   = UDim2.new(1, 0, 0, IsMobile and 10 or 12),
@@ -968,8 +974,8 @@ function AsusLib:CreateWindow(title: string)
 				AnchorPoint            = Vector2.new(0, 0.5),
 				Position               = UDim2.new(0, 0, 0.5, 0),
 				Size                   = UDim2.new(1, 0, 0, 1),
-				BackgroundColor3       = THEME.Text,
-				BackgroundTransparency = 0.88,
+				BackgroundColor3       = Color3.fromRGB(255, 255, 255),
+				BackgroundTransparency = 0.82,
 				BorderSizePixel        = 0,
 				Parent                 = Holder,
 			})
@@ -1012,20 +1018,19 @@ function AsusLib:CreateWindow(title: string)
 				LayoutOrder            = nextOrder(),
 				Parent                 = Page,
 			})
-			corner(10, Card)
+			corner(12, Card)
 			stroke(THEME.BorderSoft, 1, Card, 0.92)
-			-- Vertical padding collapses when there's no description so
-			-- the row becomes a tight single-line switch — matches the
-			-- Asus Hub screenshot where rows are ~36px tall.
+			-- Vertical padding adapts to whether a description is shown.
+			-- Single-line toggle rows land at ~44px which matches Asus Hub.
 			local padY
 			if hasDesc then
-				padY = IsMobile and 9 or 11
+				padY = IsMobile and 11 or 13
 			else
-				padY = IsMobile and 7 or 9
+				padY = IsMobile and 10 or 12
 			end
-			padding(Card, padY, padY, IsMobile and 12 or 14, IsMobile and 12 or 14)
+			padding(Card, padY, padY, IsMobile and 14 or 16, IsMobile and 14 or 16)
 			new("UISizeConstraint", {
-				MinSize = Vector2.new(0, (hasDesc and (IsMobile and 42 or 46)) or (IsMobile and 36 or 38)),
+				MinSize = Vector2.new(0, (hasDesc and (IsMobile and 48 or 52)) or (IsMobile and 44 or 48)),
 				Parent  = Card,
 			})
 			glass(Card, 0.4)
@@ -1046,12 +1051,12 @@ function AsusLib:CreateWindow(title: string)
 			})
 
 			new("TextLabel", {
-				Size                   = UDim2.new(1, 0, 0, IsMobile and 16 or 18),
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 18 or 20),
 				BackgroundTransparency = 1,
 				Text                   = opts.Name,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = IsMobile and 12 or 14,
+				TextSize               = IsMobile and 14 or 15,
 				TextXAlignment         = Enum.TextXAlignment.Left,
 				TextTruncate           = Enum.TextTruncate.AtEnd,
 				LayoutOrder            = 1,
@@ -1066,7 +1071,7 @@ function AsusLib:CreateWindow(title: string)
 					Text                   = opts.Description,
 					TextColor3             = THEME.SubText,
 					Font                   = Enum.Font.Gotham,
-					TextSize               = IsMobile and 10 or 11,
+					TextSize               = IsMobile and 11 or 12,
 					TextXAlignment         = Enum.TextXAlignment.Left,
 					TextYAlignment         = Enum.TextYAlignment.Top,
 					TextWrapped            = true,
@@ -1171,11 +1176,11 @@ function AsusLib:CreateWindow(title: string)
 				LayoutOrder            = nextOrder(),
 				Parent                 = Page,
 			})
-			corner(10, Card)
+			corner(12, Card)
 			stroke(THEME.BorderSoft, 1, Card, 0.92)
-			padding(Card, IsMobile and 10 or 12, IsMobile and 10 or 12, IsMobile and 13 or 14, IsMobile and 13 or 14)
+			padding(Card, IsMobile and 12 or 14, IsMobile and 12 or 14, IsMobile and 14 or 16, IsMobile and 14 or 16)
 			new("UISizeConstraint", {
-				MinSize = Vector2.new(0, IsMobile and 50 or 54),
+				MinSize = Vector2.new(0, IsMobile and 56 or 62),
 				Parent  = Card,
 			})
 			glass(Card, 0.4)
@@ -1197,16 +1202,16 @@ function AsusLib:CreateWindow(title: string)
 			})
 
 			-- Value label on the left of the right section
-			local valueLabelW = IsMobile and 30 or 32
+			local valueLabelW = IsMobile and 34 or 38
 			local ValueLabel = new("TextLabel", {
-				Size                   = UDim2.fromOffset(valueLabelW, 18),
+				Size                   = UDim2.fromOffset(valueLabelW, 20),
 				Position               = UDim2.new(0, 0, 0.5, 0),
 				AnchorPoint            = Vector2.new(0, 0.5),
 				BackgroundTransparency = 1,
 				Text                   = tostring(value),
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamMedium,
-				TextSize               = IsMobile and 12 or 13,
+				TextSize               = IsMobile and 13 or 14,
 				TextXAlignment         = Enum.TextXAlignment.Right,
 				Parent                 = RightCol,
 			})
@@ -1279,12 +1284,12 @@ function AsusLib:CreateWindow(title: string)
 			})
 
 			new("TextLabel", {
-				Size                   = UDim2.new(1, 0, 0, IsMobile and 16 or 18),
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 18 or 20),
 				BackgroundTransparency = 1,
 				Text                   = opts.Name,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = IsMobile and 12 or 14,
+				TextSize               = IsMobile and 14 or 15,
 				TextXAlignment         = Enum.TextXAlignment.Left,
 				TextTruncate           = Enum.TextTruncate.AtEnd,
 				LayoutOrder            = 1,
@@ -1298,7 +1303,7 @@ function AsusLib:CreateWindow(title: string)
 					Text                   = opts.Description,
 					TextColor3             = THEME.SubText,
 					Font                   = Enum.Font.Gotham,
-					TextSize               = IsMobile and 10 or 11,
+					TextSize               = IsMobile and 11 or 12,
 					TextXAlignment         = Enum.TextXAlignment.Left,
 					TextYAlignment         = Enum.TextYAlignment.Top,
 					TextWrapped            = true,
@@ -1395,12 +1400,12 @@ function AsusLib:CreateWindow(title: string)
 		function TabObj:CreateButton(opts: { Name: string, Description: string?, Callback: (() -> ())? })
 			local cb = opts.Callback or function() end
 			local hasBtnDesc = opts.Description and opts.Description ~= ""
-			-- Compact row height matching shadcn Button: taller only if a description is shown.
+			-- Row height matching the Asus Hub tappable-card look.
 			local btnH
 			if hasBtnDesc then
-				btnH = IsMobile and 42 or 46
+				btnH = IsMobile and 48 or 52
 			else
-				btnH = IsMobile and 34 or 36
+				btnH = IsMobile and 40 or 44
 			end
 			local Card = new("TextButton", {
 				Size                   = UDim2.new(1, 0, 0, btnH),
@@ -1411,25 +1416,25 @@ function AsusLib:CreateWindow(title: string)
 				LayoutOrder            = nextOrder(),
 				Parent                 = Page,
 			})
-			corner(10, Card)
+			corner(12, Card)
 			stroke(THEME.BorderSoft, 1, Card, 0.92)
 
 			new("TextLabel", {
-				Size                   = UDim2.new(1, -28, 0, hasBtnDesc and 18 or btnH),
-				Position               = UDim2.new(0, 14, 0, hasBtnDesc and 6 or 0),
+				Size                   = UDim2.new(1, -32, 0, hasBtnDesc and 20 or btnH),
+				Position               = UDim2.new(0, 16, 0, hasBtnDesc and 7 or 0),
 				BackgroundTransparency = 1,
 				Text                   = opts.Name,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = IsMobile and 13 or 14,
+				TextSize               = IsMobile and 14 or 15,
 				TextXAlignment         = Enum.TextXAlignment.Left,
-				TextYAlignment         = hasBtnDesc and Enum.TextYAlignment.Center or Enum.TextYAlignment.Center,
+				TextYAlignment         = Enum.TextYAlignment.Center,
 				Parent                 = Card,
 			})
 			if hasBtnDesc then
 				new("TextLabel", {
-					Size                   = UDim2.new(1, -28, 0, 14),
-					Position               = UDim2.new(0, 14, 0, 24),
+					Size                   = UDim2.new(1, -32, 0, 16),
+					Position               = UDim2.new(0, 16, 0, 27),
 					BackgroundTransparency = 1,
 					Text                   = opts.Description,
 					TextColor3             = THEME.SubText,
