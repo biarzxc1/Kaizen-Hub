@@ -1,10 +1,11 @@
 --!strict
 --[[
-	Kaizen Hub - Roblox UI Library (inspired by Asus Hub)
-	- Fully responsive: scales cleanly on mobile + PC, re-lays-out on rotation
+	Kaizen Hub - Roblox UI Library (inspired by Asus Hub + shadcn/ui)
+	- Fully responsive: scales cleanly on mobile + PC, re-lays-out on rotation / resize
+	- Shadcn-accurate Switch (track 44x24 / thumb 20x20 with proper padding)
+	- Pixel-perfect Slider (tracks the exact InputObject for no drift on mobile)
 	- Solid dark theme matching the reference design
 	- Real frame-drawn icons (no asset IDs, always render)
-	- White-gradient toggles, smooth tween animations
 	- Scrollable sidebar + scrollable tab pages
 	- Notification system (top-right toasts)
 	- K to toggle visibility on PC, floating circle to restore on mobile
@@ -25,6 +26,7 @@
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
+local RunService       = game:GetService("RunService")
 local CoreGui          = game:GetService("CoreGui")
 local GuiService       = game:GetService("GuiService")
 
@@ -32,32 +34,30 @@ local LocalPlayer = Players.LocalPlayer
 local IsMobile    = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
 -- ==========================================================================
--- THEME (matches the reference screenshots)
+-- THEME (shadcn/ui dark)
 -- ==========================================================================
 local THEME = {
-	-- Glassmorphism dark theme (inspired by Asus Hub + shadcn/ui)
-	Window            = Color3.fromRGB(14, 14, 16),   -- deep base
-	WindowTransparency = 0.08,                         -- slight see-through for glass feel
-	Sidebar           = Color3.fromRGB(16, 16, 18),
-	SidebarTransparency = 0.05,
-	Card              = Color3.fromRGB(32, 32, 36),
-	CardTransparency  = 0.15,                          -- translucent cards
-	CardHover         = Color3.fromRGB(44, 44, 50),
-	Accent            = Color3.fromRGB(255, 255, 255),
-	Text              = Color3.fromRGB(245, 245, 247),
-	SubText           = Color3.fromRGB(161, 161, 170), -- shadcn muted-foreground
-	TabInactive       = Color3.fromRGB(161, 161, 170),
-	-- shadcn switch colors (dark mode)
-	SwitchOff         = Color3.fromRGB(39, 39, 42),    -- input
-	SwitchOn          = Color3.fromRGB(250, 250, 250), -- primary
-	ThumbLight        = Color3.fromRGB(255, 255, 255),
-	ThumbDark         = Color3.fromRGB(10, 10, 10),
-	-- Legacy aliases (kept for slider track compatibility)
-	ToggleOff         = Color3.fromRGB(39, 39, 42),
-	ToggleOn          = Color3.fromRGB(250, 250, 250),
-	Border            = Color3.fromRGB(63, 63, 70),    -- shadcn border
-	BorderSoft        = Color3.fromRGB(255, 255, 255),
-	Toast             = Color3.fromRGB(24, 24, 27),
+	Window              = Color3.fromRGB(14, 14, 16),
+	WindowTransparency  = 0.08,
+	Sidebar             = Color3.fromRGB(16, 16, 18),
+	Card                = Color3.fromRGB(32, 32, 36),
+	CardTransparency    = 0.15,
+	CardHover           = Color3.fromRGB(44, 44, 50),
+	Accent              = Color3.fromRGB(255, 255, 255),
+	Text                = Color3.fromRGB(245, 245, 247),
+	SubText             = Color3.fromRGB(161, 161, 170),
+	TabInactive         = Color3.fromRGB(161, 161, 170),
+	-- shadcn switch
+	SwitchOff           = Color3.fromRGB(39, 39, 42),   -- input
+	SwitchOn            = Color3.fromRGB(250, 250, 250),-- primary
+	ThumbLight          = Color3.fromRGB(255, 255, 255),
+	ThumbDark           = Color3.fromRGB(10, 10, 10),
+	-- shadcn slider
+	TrackOff            = Color3.fromRGB(39, 39, 42),   -- secondary (empty track)
+	TrackOn             = Color3.fromRGB(250, 250, 250),-- primary (filled track)
+	Border              = Color3.fromRGB(63, 63, 70),
+	BorderSoft          = Color3.fromRGB(255, 255, 255),
+	Toast               = Color3.fromRGB(24, 24, 27),
 }
 
 -- ==========================================================================
@@ -88,11 +88,40 @@ local function stroke(color: Color3, thickness: number, parent: Instance, transp
 	return s
 end
 
--- Apply a glassmorphism effect: translucent bg + soft top-to-bottom highlight gradient
--- + subtle inner border. Roblox GUIs can't blur, so this simulates frosted glass.
+local function padding(parent: Instance, top: number, bottom: number, left: number, right: number)
+	local p = Instance.new("UIPadding")
+	p.PaddingTop    = UDim.new(0, top)
+	p.PaddingBottom = UDim.new(0, bottom)
+	p.PaddingLeft   = UDim.new(0, left)
+	p.PaddingRight  = UDim.new(0, right)
+	p.Parent = parent
+	return p
+end
+
+-- Tween helper that tracks and cancels the previous tween on the same instance+prop-set
+-- so rapid toggles/slider drags never fight each other.
+local _activeTweens: {[Instance]: Tween} = {}
+local function tween(inst: Instance, time: number, props: {[string]: any}, style: Enum.EasingStyle?, dir: Enum.EasingDirection?)
+	local prev = _activeTweens[inst]
+	if prev then
+		pcall(function() prev:Cancel() end)
+	end
+	local t = TweenService:Create(
+		inst,
+		TweenInfo.new(time, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out),
+		props
+	)
+	_activeTweens[inst] = t
+	t.Completed:Connect(function()
+		if _activeTweens[inst] == t then _activeTweens[inst] = nil end
+	end)
+	t:Play()
+	return t
+end
+
+-- Apply a glassmorphism effect (translucent bg + soft highlight gradient)
 local function glass(parent: GuiObject, intensity: number?)
 	intensity = intensity or 1
-	-- Top highlight gradient (lighter at top, darker at bottom) - gives a "lit" look
 	local g = Instance.new("UIGradient")
 	g.Rotation = 90
 	g.Transparency = NumberSequence.new({
@@ -104,7 +133,6 @@ local function glass(parent: GuiObject, intensity: number?)
 		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
 		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
 	})
-	-- We parent to a separate overlay frame so it doesn't tint the bg color
 	local overlay = Instance.new("Frame")
 	overlay.Name = "GlassHighlight"
 	overlay.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -114,7 +142,6 @@ local function glass(parent: GuiObject, intensity: number?)
 	overlay.ZIndex = (parent.ZIndex or 1)
 	overlay.Parent = parent
 	g.Parent = overlay
-	-- Match parent corner radius if present
 	for _, child in ipairs(parent:GetChildren()) do
 		if child:IsA("UICorner") then
 			local c = Instance.new("UICorner")
@@ -126,46 +153,27 @@ local function glass(parent: GuiObject, intensity: number?)
 	return overlay
 end
 
-local function padding(parent: Instance, top: number, bottom: number, left: number, right: number)
-	local p = Instance.new("UIPadding")
-	p.PaddingTop    = UDim.new(0, top)
-	p.PaddingBottom = UDim.new(0, bottom)
-	p.PaddingLeft   = UDim.new(0, left)
-	p.PaddingRight  = UDim.new(0, right)
-	p.Parent = parent
-	return p
-end
-
-local function tween(inst: Instance, time: number, props: {[string]: any}, style: Enum.EasingStyle?, dir: Enum.EasingDirection?)
-	local t = TweenService:Create(
-		inst,
-		TweenInfo.new(time, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out),
-		props
-	)
-	t:Play()
-	return t
-end
-
--- Draggable (mouse + touch)
+-- Draggable (mouse + touch) — tracks the actual input object to be accurate on mobile
 local function makeDraggable(frame: GuiObject, handle: GuiObject)
-	local dragging, dragStart, startPos = false, nil, nil
+	local dragInput: InputObject? = nil
+	local dragStart: Vector3? = nil
+	local startPos: UDim2? = nil
+
 	handle.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1
 		or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
+			dragInput = input
 			dragStart = input.Position
 			startPos  = frame.Position
 			input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
-					dragging = false
+					dragInput = nil
 				end
 			end)
 		end
 	end)
 	UserInputService.InputChanged:Connect(function(input)
-		if not dragging then return end
-		if input.UserInputType == Enum.UserInputType.MouseMovement
-		or input.UserInputType == Enum.UserInputType.Touch then
+		if input == dragInput and dragStart and startPos then
 			local delta = input.Position - dragStart
 			frame.Position = UDim2.new(
 				startPos.X.Scale, startPos.X.Offset + delta.X,
@@ -249,7 +257,6 @@ ICON_DRAWERS.minus = function(c, color)
 end
 
 ICON_DRAWERS.home = function(c, color)
-	-- Triangle roof (approximated) + square base
 	line(c, color, -4, -4, 12, 2, 45)
 	line(c, color,  4, -4, 12, 2, -45)
 	local base = new("Frame", {
@@ -390,7 +397,7 @@ end
 -- LIBRARY
 -- ==========================================================================
 local AsusLib = {}
-AsusLib._screens = {} -- track all created ScreenGuis for Notify
+AsusLib._screens = {}
 
 -- ----------------------------------------------------------------------
 -- NOTIFICATIONS (top-right toasts)
@@ -482,7 +489,6 @@ function AsusLib:Notify(opts: { Title: string?, Text: string, Duration: number? 
 		Parent                 = toast,
 	})
 
-	-- Fade in
 	tween(toast, 0.18, { BackgroundTransparency = 0 })
 	for _, child in ipairs(toast:GetChildren()) do
 		if child:IsA("TextLabel") then
@@ -521,21 +527,32 @@ function AsusLib:CreateWindow(title: string)
 	})
 	table.insert(AsusLib._screens, ScreenGui)
 
-	-- Responsive sizing — scales to viewport, auto-updates on rotation / resize
+	-- ============================================================
+	-- RESPONSIVE SIZING — scales to viewport (portrait/landscape/PC)
+	-- ============================================================
 	local camera = workspace.CurrentCamera
 	local function computeSize()
 		local viewport = (camera and camera.ViewportSize) or Vector2.new(1280, 720)
+		local vw, vh = viewport.X, viewport.Y
 		local w, h
 		if IsMobile then
-			-- Smaller on mobile: ~72% of viewport, capped so it never overflows
-			w = math.clamp(viewport.X * 0.72, 340, 600)
-			h = math.clamp(viewport.Y * 0.68, 260, 380)
+			-- Mobile: bigger on small phones (relative), capped on tablets
+			if vw < 600 then
+				-- small portrait phone
+				w = math.clamp(vw * 0.92, 320, 560)
+				h = math.clamp(vh * 0.80, 260, 420)
+			else
+				-- landscape phone / tablet
+				w = math.clamp(vw * 0.68, 420, 640)
+				h = math.clamp(vh * 0.72, 280, 420)
+			end
 		else
-			w = math.clamp(viewport.X * 0.50, 560, 720)
-			h = math.clamp(viewport.Y * 0.65, 380, 480)
+			w = math.clamp(vw * 0.50, 560, 760)
+			h = math.clamp(vh * 0.65, 400, 520)
 		end
 		return Vector2.new(math.floor(w), math.floor(h))
 	end
+
 	local winSize = computeSize()
 	local winW, winH = winSize.X, winSize.Y
 
@@ -551,18 +568,18 @@ function AsusLib:CreateWindow(title: string)
 		Parent                 = ScreenGui,
 	})
 	corner(16, Window)
-	-- Soft outer glow border (glass edge)
 	stroke(THEME.BorderSoft, 1, Window, 0.85)
 	glass(Window, 0.6)
 
 	-- ---------- TITLE BAR ----------
+	local titleBarHeight = IsMobile and 42 or 46
 	local TitleBar = new("Frame", {
 		Name                   = "TitleBar",
-		Size                   = UDim2.new(1, 0, 0, 46),
+		Size                   = UDim2.new(1, 0, 0, titleBarHeight),
 		BackgroundTransparency = 1,
 		Parent                 = Window,
 	})
-	padding(TitleBar, 0, 0, 18, 12)
+	padding(TitleBar, 0, 0, IsMobile and 14 or 18, 10)
 
 	local TitleLabel = new("TextLabel", {
 		Size                   = UDim2.new(1, -90, 1, 0),
@@ -570,16 +587,17 @@ function AsusLib:CreateWindow(title: string)
 		Text                   = title or "Kaizen Hub",
 		TextColor3             = THEME.Text,
 		Font                   = Enum.Font.GothamBold,
-		TextSize               = IsMobile and 15 or 16,
+		TextSize               = IsMobile and 14 or 16,
 		TextXAlignment         = Enum.TextXAlignment.Left,
 		TextYAlignment         = Enum.TextYAlignment.Center,
 		TextTruncate           = Enum.TextTruncate.AtEnd,
 		Parent                 = TitleBar,
 	})
 
+	local btnSize = IsMobile and 34 or 30
 	local MinBtn = new("TextButton", {
-		Size                   = UDim2.fromOffset(30, 30),
-		Position               = UDim2.new(1, -56, 0.5, 0),
+		Size                   = UDim2.fromOffset(btnSize, btnSize),
+		Position               = UDim2.new(1, -(btnSize + 24), 0.5, 0),
 		AnchorPoint            = Vector2.new(0, 0.5),
 		BackgroundTransparency = 1,
 		Text                   = "",
@@ -591,8 +609,8 @@ function AsusLib:CreateWindow(title: string)
 	minIcon.AnchorPoint = Vector2.new(0.5, 0.5)
 
 	local CloseBtn = new("TextButton", {
-		Size                   = UDim2.fromOffset(30, 30),
-		Position               = UDim2.new(1, -26, 0.5, 0),
+		Size                   = UDim2.fromOffset(btnSize, btnSize),
+		Position               = UDim2.new(1, -btnSize + 4, 0.5, 0),
 		AnchorPoint            = Vector2.new(0, 0.5),
 		BackgroundTransparency = 1,
 		Text                   = "",
@@ -605,24 +623,24 @@ function AsusLib:CreateWindow(title: string)
 
 	makeDraggable(Window, TitleBar)
 
-	-- Keep the window sized to the viewport (handles rotation / resizing)
-	if camera then
-		camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-			local s = computeSize()
-			tween(Window, 0.2, { Size = UDim2.fromOffset(s.X, s.Y) })
-		end)
-	end
-
 	-- ---------- BODY ----------
 	local Body = new("Frame", {
-		Size                   = UDim2.new(1, 0, 1, -46),
-		Position               = UDim2.new(0, 0, 0, 46),
+		Size                   = UDim2.new(1, 0, 1, -titleBarHeight),
+		Position               = UDim2.new(0, 0, 0, titleBarHeight),
 		BackgroundTransparency = 1,
 		Parent                 = Window,
 	})
 
-	-- Sidebar (scrollable — fits any number of tabs)
-	local sidebarWidth = IsMobile and 132 or 180
+	-- Sidebar width scales a bit with window width on mobile
+	local function computeSidebarWidth()
+		if not IsMobile then return 180 end
+		local viewport = (camera and camera.ViewportSize) or Vector2.new(800, 400)
+		if viewport.X < 500 then return 118 end
+		if viewport.X < 700 then return 128 end
+		return 140
+	end
+
+	local sidebarWidth = computeSidebarWidth()
 	local Sidebar = new("Frame", {
 		Name                   = "Sidebar",
 		Size                   = UDim2.new(0, sidebarWidth, 1, 0),
@@ -662,9 +680,23 @@ function AsusLib:CreateWindow(title: string)
 		BackgroundTransparency = 1,
 		Parent                 = Body,
 	})
-	padding(Content, 4, 14, 4, 18)
+	padding(Content, 4, 14, 4, IsMobile and 12 or 18)
 
-	-- ---------- FLOATING RESTORE ICON (shown when window is hidden) ----------
+	-- Rebuild layout on rotation / resize
+	if camera then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			local s = computeSize()
+			tween(Window, 0.2, { Size = UDim2.fromOffset(s.X, s.Y) })
+			local newSidebar = computeSidebarWidth()
+			tween(Sidebar, 0.2, { Size = UDim2.new(0, newSidebar, 1, 0) })
+			tween(Content, 0.2, {
+				Size     = UDim2.new(1, -newSidebar, 1, 0),
+				Position = UDim2.new(0, newSidebar, 0, 0),
+			})
+		end)
+	end
+
+	-- ---------- FLOATING RESTORE ICON ----------
 	local RestoreIcon = new("ImageButton", {
 		Name                   = "RestoreIcon",
 		Size                   = UDim2.fromOffset(48, 48),
@@ -684,7 +716,7 @@ function AsusLib:CreateWindow(title: string)
 	restoreIconBox.AnchorPoint = Vector2.new(0.5, 0.5)
 	makeDraggable(RestoreIcon, RestoreIcon)
 
-	-- ---------- VISIBILITY LOGIC ----------
+	-- ---------- VISIBILITY ----------
 	local hidden = false
 	local function setHidden(h: boolean, notify: boolean?)
 		hidden = h
@@ -697,27 +729,18 @@ function AsusLib:CreateWindow(title: string)
 		end
 	end
 
-	MinBtn.MouseButton1Click:Connect(function()
-		setHidden(true, true)
-	end)
-
-	RestoreIcon.MouseButton1Click:Connect(function()
-		setHidden(false)
-	end)
-
+	MinBtn.MouseButton1Click:Connect(function() setHidden(true, true) end)
+	RestoreIcon.MouseButton1Click:Connect(function() setHidden(false) end)
 	CloseBtn.MouseButton1Click:Connect(function()
 		tween(Window, 0.18, { Size = UDim2.new(0, 0, 0, 0) })
 		task.wait(0.2)
 		ScreenGui:Destroy()
 	end)
 
-	-- K keybind to toggle visibility (PC)
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
 		if input.KeyCode == Enum.KeyCode.K then
-			if ScreenGui.Parent then
-				setHidden(not hidden)
-			end
+			if ScreenGui.Parent then setHidden(not hidden) end
 		end
 	end)
 
@@ -735,12 +758,11 @@ function AsusLib:CreateWindow(title: string)
 
 		local tabRow = new("Frame", {
 			Name                   = "Tab_" .. name,
-			Size                   = UDim2.new(1, 0, 0, 40),
+			Size                   = UDim2.new(1, 0, 0, IsMobile and 38 or 40),
 			BackgroundTransparency = 1,
 			Parent                 = TabList,
 		})
 
-		-- White accent bar (the "white thing" on active tab)
 		local accent = new("Frame", {
 			Size                   = UDim2.fromOffset(3, 22),
 			Position               = UDim2.new(0, 0, 0.5, 0),
@@ -768,8 +790,9 @@ function AsusLib:CreateWindow(title: string)
 			Text                   = "| " .. name,
 			TextColor3             = THEME.TabInactive,
 			Font                   = Enum.Font.GothamMedium,
-			TextSize               = IsMobile and 14 or 15,
+			TextSize               = IsMobile and 13 or 15,
 			TextXAlignment         = Enum.TextXAlignment.Left,
+			TextTruncate           = Enum.TextTruncate.AtEnd,
 			Parent                 = tabRow,
 		})
 
@@ -798,19 +821,19 @@ function AsusLib:CreateWindow(title: string)
 
 		new("TextLabel", {
 			Name                   = "Header",
-			Size                   = UDim2.new(1, 0, 0, 38),
+			Size                   = UDim2.new(1, 0, 0, IsMobile and 34 or 38),
 			BackgroundTransparency = 1,
 			Text                   = name,
 			TextColor3             = THEME.Text,
 			Font                   = Enum.Font.GothamBold,
-			TextSize               = IsMobile and 22 or 24,
+			TextSize               = IsMobile and 20 or 24,
 			TextXAlignment         = Enum.TextXAlignment.Left,
 			LayoutOrder            = 0,
 			Parent                 = Page,
 		})
 
 		new("UIListLayout", {
-			Padding   = UDim.new(0, 10),
+			Padding   = UDim.new(0, IsMobile and 8 or 10),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 			Parent    = Page,
 		})
@@ -836,7 +859,6 @@ function AsusLib:CreateWindow(title: string)
 		end
 
 		click.MouseButton1Click:Connect(select)
-		-- Hover feedback on PC
 		if not IsMobile then
 			click.MouseEnter:Connect(function()
 				if not Page.Visible then tween(label, 0.12, { TextColor3 = Color3.fromRGB(220, 220, 220) }) end
@@ -856,7 +878,7 @@ function AsusLib:CreateWindow(title: string)
 		-- ---------- LABEL ----------
 		function TabObj:CreateLabel(text: string)
 			local Card = new("Frame", {
-				Size                   = UDim2.new(1, 0, 0, 50),
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 44 or 50),
 				BackgroundColor3       = THEME.Card,
 				BorderSizePixel        = 0,
 				LayoutOrder            = nextOrder(),
@@ -870,23 +892,38 @@ function AsusLib:CreateWindow(title: string)
 				Text                   = text,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = 15,
+				TextSize               = IsMobile and 14 or 15,
 				TextXAlignment         = Enum.TextXAlignment.Left,
 				Parent                 = Card,
 			})
 			return { SetText = function(_, s: string) tl.Text = s end }
 		end
 
-		-- ---------- TOGGLE ----------
+		-- ==============================================================
+		-- TOGGLE (shadcn/ui Switch — Radix primitive)
+		-- Reference: https://ui.shadcn.com/docs/components/radix/switch
+		-- Track: w-11 (44px) h-6 (24px)
+		-- Thumb: h-5 w-5 (20px) with 2px padding on all sides
+		-- OFF: bg-input (dark zinc), thumb white
+		-- ON : bg-primary (white), thumb dark
+		-- Smooth transition-transform animation
+		-- ==============================================================
 		function TabObj:CreateToggle(opts: {
 			Name: string, Description: string?, Default: boolean?, Callback: ((boolean) -> ())?
 		})
 			local state = opts.Default == true
 			local cb    = opts.Callback or function() end
-
 			local hasDesc = opts.Description and opts.Description ~= ""
 
-			-- Card auto-grows with description; switch is vertically centered via anchor
+			-- Touch-friendly sizes. Mobile = larger for easier tapping, but still shadcn proportions.
+			local swW, swH, thumbPad
+			if IsMobile then
+				swW, swH, thumbPad = 48, 28, 3
+			else
+				swW, swH, thumbPad = 44, 24, 2
+			end
+			local thumb = swH - (thumbPad * 2)
+
 			local Card = new("Frame", {
 				Size                   = UDim2.new(1, 0, 0, 0),
 				AutomaticSize          = Enum.AutomaticSize.Y,
@@ -898,15 +935,15 @@ function AsusLib:CreateWindow(title: string)
 			})
 			corner(12, Card)
 			stroke(THEME.BorderSoft, 1, Card, 0.92)
-			padding(Card, IsMobile and 12 or 14, IsMobile and 12 or 14, IsMobile and 14 or 18, IsMobile and 14 or 18)
+			padding(Card, IsMobile and 11 or 14, IsMobile and 11 or 14, IsMobile and 13 or 18, IsMobile and 13 or 18)
 			new("UISizeConstraint", {
 				MinSize = Vector2.new(0, IsMobile and 48 or 54),
 				Parent  = Card,
 			})
 			glass(Card, 0.4)
 
-			-- Reserve space on the right for the switch; text column fills the rest
-			local reserveRight = IsMobile and 58 or 64
+			-- Horizontal row layout: text grows, switch stays pinned right
+			local reserveRight = swW + 12
 			local TextCol = new("Frame", {
 				Size                   = UDim2.new(1, -reserveRight, 0, 0),
 				AutomaticSize          = Enum.AutomaticSize.Y,
@@ -914,7 +951,7 @@ function AsusLib:CreateWindow(title: string)
 				Parent                 = Card,
 			})
 			new("UIListLayout", {
-				Padding        = UDim.new(0, 4),
+				Padding        = UDim.new(0, 3),
 				SortOrder      = Enum.SortOrder.LayoutOrder,
 				FillDirection  = Enum.FillDirection.Vertical,
 				Parent         = TextCol,
@@ -926,14 +963,15 @@ function AsusLib:CreateWindow(title: string)
 				Text                   = opts.Name,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = IsMobile and 14 or 15,
+				TextSize               = IsMobile and 13 or 15,
 				TextXAlignment         = Enum.TextXAlignment.Left,
 				TextTruncate           = Enum.TextTruncate.AtEnd,
 				LayoutOrder            = 1,
 				Parent                 = TextCol,
 			})
 			if hasDesc then
-				local Desc = new("TextLabel", {
+				new("TextLabel", {
+					Name                   = "Description",
 					Size                   = UDim2.new(1, 0, 0, 0),
 					AutomaticSize          = Enum.AutomaticSize.Y,
 					BackgroundTransparency = 1,
@@ -947,51 +985,33 @@ function AsusLib:CreateWindow(title: string)
 					LayoutOrder            = 2,
 					Parent                 = TextCol,
 				})
-				Desc.Name = "Description"
 			end
 
-			-- ======================================================
-			-- SHADCN/UI Switch (flat, minimal, pill track + circle thumb)
-			-- Track: w-11 h-6 (44x24)  |  Thumb: h-5 w-5 (20x20)
-			-- OFF: dark muted track, white thumb
-			-- ON : white track, dark thumb
-			-- ======================================================
-			local swW   = IsMobile and 46 or 44
-			local swH   = IsMobile and 26 or 24
-			local thumb = swH - 4   -- shadcn thumb = track height - 4px padding
-
+			-- Switch track (pill)
 			local Switch = new("Frame", {
+				Name                   = "Switch",
 				Size                   = UDim2.fromOffset(swW, swH),
 				Position               = UDim2.new(1, 0, 0.5, 0),
 				AnchorPoint            = Vector2.new(1, 0.5),
 				BackgroundColor3       = THEME.SwitchOff,
-				BackgroundTransparency = 0,
 				BorderSizePixel        = 0,
 				Parent                 = Card,
 			})
 			corner(math.floor(swH / 2), Switch)
-			-- Shadcn has a subtle ring border on the switch
 			local SwitchStroke = stroke(THEME.Border, 1, Switch, 0.4)
 
+			-- Thumb
 			local Knob = new("Frame", {
+				Name                   = "Thumb",
 				Size                   = UDim2.fromOffset(thumb, thumb),
-				Position               = UDim2.fromOffset(2, 2),
+				Position               = UDim2.fromOffset(thumbPad, thumbPad),
 				BackgroundColor3       = THEME.ThumbLight,
 				BorderSizePixel        = 0,
 				Parent                 = Switch,
 			})
 			corner(math.floor(thumb / 2), Knob)
-			-- Soft drop shadow (shadcn-like) via a second frame beneath the knob
-			local KnobShadow = new("Frame", {
-				Size                   = UDim2.new(1, 2, 1, 2),
-				Position               = UDim2.fromOffset(-1, 0),
-				BackgroundColor3       = Color3.fromRGB(0, 0, 0),
-				BackgroundTransparency = 0.75,
-				BorderSizePixel        = 0,
-				ZIndex                 = Knob.ZIndex - 1,
-				Parent                 = Switch,
-			})
-			corner(math.floor(thumb / 2), KnobShadow)
+			-- Very subtle ring on the thumb (shadcn uses shadow-lg + ring)
+			stroke(Color3.fromRGB(0, 0, 0), 1, Knob, 0.88)
 
 			local Btn = new("TextButton", {
 				Size                   = UDim2.new(1, 0, 1, 0),
@@ -1001,35 +1021,32 @@ function AsusLib:CreateWindow(title: string)
 				Parent                 = Card,
 			})
 
-			local knobOn    = UDim2.fromOffset(swW - thumb - 2, 2)
-			local knobOff   = UDim2.fromOffset(2, 2)
-			local shadowOn  = UDim2.fromOffset(swW - thumb - 3, 0)
-			local shadowOff = UDim2.fromOffset(-1, 0)
+			local knobOn  = UDim2.fromOffset(swW - thumb - thumbPad, thumbPad)
+			local knobOff = UDim2.fromOffset(thumbPad, thumbPad)
 
 			local function render(animated: boolean?)
-				local t = animated == false and 0 or 0.2
+				local t = (animated == false) and 0 or 0.18
 				if state then
-					tween(Switch,     t, { BackgroundColor3 = THEME.SwitchOn })
+					tween(Switch,       t, { BackgroundColor3 = THEME.SwitchOn })
 					tween(SwitchStroke, t, { Transparency = 1 })
-					tween(Knob,       t, { Position = knobOn,   BackgroundColor3 = THEME.ThumbDark })
-					tween(KnobShadow, t, { Position = shadowOn, BackgroundTransparency = 0.65 })
+					tween(Knob,         t, { Position = knobOn,  BackgroundColor3 = THEME.ThumbDark })
 				else
-					tween(Switch,     t, { BackgroundColor3 = THEME.SwitchOff })
+					tween(Switch,       t, { BackgroundColor3 = THEME.SwitchOff })
 					tween(SwitchStroke, t, { Transparency = 0.4 })
-					tween(Knob,       t, { Position = knobOff,   BackgroundColor3 = THEME.ThumbLight })
-					tween(KnobShadow, t, { Position = shadowOff, BackgroundTransparency = 0.75 })
+					tween(Knob,         t, { Position = knobOff, BackgroundColor3 = THEME.ThumbLight })
 				end
 			end
 
 			Btn.MouseButton1Click:Connect(function()
 				state = not state
-				-- Shadcn doesn't squash, it uses a clean linear/ease-out slide.
 				render(true)
 				task.spawn(cb, state)
 			end)
-			-- Subtle card hover on desktop
-			Card.MouseEnter:Connect(function() tween(Card, 0.12, { BackgroundColor3 = THEME.CardHover }) end)
-			Card.MouseLeave:Connect(function() tween(Card, 0.15, { BackgroundColor3 = THEME.Card }) end)
+			-- Hover on desktop only
+			if not IsMobile then
+				Card.MouseEnter:Connect(function() tween(Card, 0.12, { BackgroundColor3 = THEME.CardHover }) end)
+				Card.MouseLeave:Connect(function() tween(Card, 0.15, { BackgroundColor3 = THEME.Card }) end)
+			end
 			render(false)
 
 			return {
@@ -1038,7 +1055,14 @@ function AsusLib:CreateWindow(title: string)
 			}
 		end
 
-		-- ---------- SLIDER ----------
+		-- ==============================================================
+		-- SLIDER (shadcn/ui Slider — Radix primitive)
+		-- Reference: https://ui.shadcn.com/docs/components/radix/slider
+		-- Track: thin bar (h-1.5 = 6px in shadcn, we use 4px for roblox)
+		-- Range (filled portion): primary white
+		-- Thumb: h-5 w-5 (20px) circle, white, ring border
+		-- Drag: tracks the SPECIFIC InputObject for pixel-accurate mobile dragging
+		-- ==============================================================
 		function TabObj:CreateSlider(opts: {
 			Name: string, Description: string?, Min: number, Max: number,
 			Default: number?, Increment: number?, Callback: ((number) -> ())?
@@ -1048,7 +1072,6 @@ function AsusLib:CreateWindow(title: string)
 			local inc   = opts.Increment or 1
 			local value = math.clamp(opts.Default or minV, minV, maxV)
 			local cb    = opts.Callback or function() end
-
 			local hasDesc = opts.Description and opts.Description ~= ""
 
 			local Card = new("Frame", {
@@ -1064,39 +1087,72 @@ function AsusLib:CreateWindow(title: string)
 			stroke(THEME.BorderSoft, 1, Card, 0.92)
 			padding(Card, IsMobile and 12 or 14, IsMobile and 12 or 14, IsMobile and 14 or 18, IsMobile and 14 or 18)
 			new("UISizeConstraint", {
-				MinSize = Vector2.new(0, IsMobile and 56 or 62),
+				MinSize = Vector2.new(0, IsMobile and 58 or 64),
 				Parent  = Card,
 			})
 			glass(Card, 0.4)
 
-			-- Track is a fraction of card width; much more responsive than fixed px
-			local trackFrac = IsMobile and 0.40 or 0.38
-			local trackMinPx = 100
-			local Track = new("Frame", {
-				Size                   = UDim2.new(trackFrac, 0, 0, 4),
-				Position               = UDim2.new(1, 0, 0, IsMobile and 12 or 14),
+			-- Layout: text column (left, auto-grows) | value label + track (right, fixed fraction)
+			-- The right section takes ~45% of card width on mobile, 42% on PC.
+			local rightFrac = IsMobile and 0.48 or 0.44
+			local trackThickness = 4
+			local knobPx = IsMobile and 18 or 16
+
+			-- Right container holds value number + track, vertically centered in the card
+			local RightCol = new("Frame", {
+				Name                   = "SliderRight",
+				Size                   = UDim2.new(rightFrac, -8, 1, 0),
+				Position               = UDim2.new(1, 0, 0, 0),
 				AnchorPoint            = Vector2.new(1, 0),
-				BackgroundColor3       = THEME.ToggleOff,
-				BorderSizePixel        = 0,
+				BackgroundTransparency = 1,
 				Parent                 = Card,
 			})
+
+			-- Value label on the left of the right section
+			local valueLabelW = IsMobile and 34 or 38
+			local ValueLabel = new("TextLabel", {
+				Size                   = UDim2.fromOffset(valueLabelW, 20),
+				Position               = UDim2.new(0, 0, 0.5, 0),
+				AnchorPoint            = Vector2.new(0, 0.5),
+				BackgroundTransparency = 1,
+				Text                   = tostring(value),
+				TextColor3             = THEME.Text,
+				Font                   = Enum.Font.GothamMedium,
+				TextSize               = IsMobile and 13 or 14,
+				TextXAlignment         = Enum.TextXAlignment.Right,
+				Parent                 = RightCol,
+			})
+
+			-- Track fills the rest of the right column, to the right of the value label
+			-- Uses Scale width so it responds to every viewport / window-resize automatically.
+			local trackLeftPad = valueLabelW + 8
+			local Track = new("Frame", {
+				Name                   = "Track",
+				Size                   = UDim2.new(1, -trackLeftPad, 0, trackThickness),
+				Position               = UDim2.new(0, trackLeftPad, 0.5, 0),
+				AnchorPoint            = Vector2.new(0, 0.5),
+				BackgroundColor3       = THEME.TrackOff,
+				BorderSizePixel        = 0,
+				Parent                 = RightCol,
+			})
+			corner(trackThickness, Track)
+			-- Minimum size so the track never collapses on very narrow cards
 			new("UISizeConstraint", {
-				MinSize = Vector2.new(trackMinPx, 4),
-				MaxSize = Vector2.new(180, 4),
+				MinSize = Vector2.new(80, trackThickness),
 				Parent  = Track,
 			})
-			corner(2, Track)
 
 			local Fill = new("Frame", {
+				Name                   = "Range",
 				Size                   = UDim2.new(0, 0, 1, 0),
-				BackgroundColor3       = THEME.Accent,
+				BackgroundColor3       = THEME.TrackOn,
 				BorderSizePixel        = 0,
 				Parent                 = Track,
 			})
-			corner(2, Fill)
+			corner(trackThickness, Fill)
 
-			local knobPx = IsMobile and 18 or 14
 			local Knob = new("Frame", {
+				Name                   = "Thumb",
 				Size                   = UDim2.fromOffset(knobPx, knobPx),
 				Position               = UDim2.new(0, 0, 0.5, 0),
 				AnchorPoint            = Vector2.new(0.5, 0.5),
@@ -1107,29 +1163,26 @@ function AsusLib:CreateWindow(title: string)
 			corner(math.floor(knobPx / 2), Knob)
 			stroke(Color3.fromRGB(0, 0, 0), 1, Knob, 0.85)
 
-			-- Value label sits just to the LEFT of the track (screenshot: "30" before bar)
-			local ValueLabel = new("TextLabel", {
-				Size                   = UDim2.fromOffset(44, 20),
-				AnchorPoint            = Vector2.new(1, 0.5),
-				Position               = UDim2.new(1 - trackFrac, -6, 0, (IsMobile and 12 or 14) + 2),
+			-- Invisible hit-pad over the thumb for easier dragging on mobile
+			local KnobHit = new("TextButton", {
+				Size                   = UDim2.fromOffset(knobPx + 16, knobPx + 16),
+				Position               = UDim2.new(0.5, 0, 0.5, 0),
+				AnchorPoint            = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
-				Text                   = tostring(value),
-				TextColor3             = THEME.Text,
-				Font                   = Enum.Font.GothamMedium,
-				TextSize               = IsMobile and 13 or 14,
-				TextXAlignment         = Enum.TextXAlignment.Right,
-				Parent                 = Card,
+				Text                   = "",
+				AutoButtonColor        = false,
+				Parent                 = Knob,
 			})
 
-			-- Text column: title + optional description, reserves space for track+value on the right
+			-- Text column: title + optional description. Reserves space so it never overlaps track.
 			local TextCol = new("Frame", {
-				Size                   = UDim2.new(1 - trackFrac, -12, 0, 0),
+				Size                   = UDim2.new(1 - rightFrac, -4, 0, 0),
 				AutomaticSize          = Enum.AutomaticSize.Y,
 				BackgroundTransparency = 1,
 				Parent                 = Card,
 			})
 			new("UIListLayout", {
-				Padding       = UDim.new(0, 4),
+				Padding       = UDim.new(0, 3),
 				SortOrder     = Enum.SortOrder.LayoutOrder,
 				FillDirection = Enum.FillDirection.Vertical,
 				Parent        = TextCol,
@@ -1141,13 +1194,12 @@ function AsusLib:CreateWindow(title: string)
 				Text                   = opts.Name,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = IsMobile and 14 or 15,
+				TextSize               = IsMobile and 13 or 15,
 				TextXAlignment         = Enum.TextXAlignment.Left,
 				TextTruncate           = Enum.TextTruncate.AtEnd,
 				LayoutOrder            = 1,
 				Parent                 = TextCol,
 			})
-
 			if hasDesc then
 				new("TextLabel", {
 					Size                   = UDim2.new(1, 0, 0, 0),
@@ -1165,55 +1217,86 @@ function AsusLib:CreateWindow(title: string)
 				})
 			end
 
-			local function setValue(v: number, fire: boolean?)
+			-- =========== VALUE MATH & UPDATE ===========
+			local function setValue(v: number, fire: boolean?, animated: boolean?)
 				v = math.clamp(v, minV, maxV)
-				v = math.floor((v / inc) + 0.5) * inc
+				if inc and inc > 0 then
+					v = math.floor(((v - minV) / inc) + 0.5) * inc + minV
+					v = math.clamp(v, minV, maxV)
+				end
 				value = v
 				local alpha = (maxV == minV) and 0 or (v - minV) / (maxV - minV)
-				Fill.Size     = UDim2.new(alpha, 0, 1, 0)
-				Knob.Position = UDim2.new(alpha, 0, 0.5, 0)
-				ValueLabel.Text = tostring(v)
+				if animated then
+					tween(Fill, 0.08, { Size = UDim2.new(alpha, 0, 1, 0) }, Enum.EasingStyle.Linear)
+					tween(Knob, 0.08, { Position = UDim2.new(alpha, 0, 0.5, 0) }, Enum.EasingStyle.Linear)
+				else
+					Fill.Size     = UDim2.new(alpha, 0, 1, 0)
+					Knob.Position = UDim2.new(alpha, 0, 0.5, 0)
+				end
+				-- Show integer if increment is whole, else format with 2 decimals
+				if inc >= 1 and math.floor(inc) == inc then
+					ValueLabel.Text = tostring(math.floor(v))
+				else
+					ValueLabel.Text = string.format("%.2f", v)
+				end
 				if fire ~= false then task.spawn(cb, v) end
 			end
-			setValue(value, false)
+			setValue(value, false, false)
 
-			local dragging = false
-			local function updateFromInput(input: InputObject)
-				local pos  = input.Position.X
-				local abs  = Track.AbsolutePosition.X
-				local size = Track.AbsoluteSize.X
-				local alpha = math.clamp((pos - abs) / size, 0, 1)
-				setValue(minV + (maxV - minV) * alpha, true)
+			-- =========== ACCURATE DRAG LOGIC ===========
+			-- Tracks the exact InputObject that started the drag. This is the key to
+			-- pixel-accurate mobile sliding (UIS.InputChanged fires for ALL active
+			-- touches; without filtering by the original InputObject the slider
+			-- would jump when a second finger touched the screen).
+			local activeInput: InputObject? = nil
+
+			local function updateFromPos(screenX: number)
+				local absX  = Track.AbsolutePosition.X
+				local absW  = Track.AbsoluteSize.X
+				if absW <= 0 then return end
+				local alpha = math.clamp((screenX - absX) / absW, 0, 1)
+				setValue(minV + (maxV - minV) * alpha, true, false)
 			end
 
+			local function beginDrag(input: InputObject)
+				activeInput = input
+				tween(Knob, 0.12, { Size = UDim2.fromOffset(knobPx + 4, knobPx + 4) })
+				updateFromPos(input.Position.X)
+			end
+			local function endDrag()
+				activeInput = nil
+				tween(Knob, 0.12, { Size = UDim2.fromOffset(knobPx, knobPx) })
+			end
+
+			-- Clicking anywhere on the track jumps the knob + starts a drag
 			Track.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1
 				or input.UserInputType == Enum.UserInputType.Touch then
-					dragging = true
-					updateFromInput(input)
+					beginDrag(input)
 				end
 			end)
-			Knob.InputBegan:Connect(function(input)
+			-- Grabbing the thumb hit-pad also starts a drag
+			KnobHit.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1
 				or input.UserInputType == Enum.UserInputType.Touch then
-					dragging = true
+					activeInput = input
+					tween(Knob, 0.12, { Size = UDim2.fromOffset(knobPx + 4, knobPx + 4) })
 				end
 			end)
+
 			UserInputService.InputChanged:Connect(function(input)
-				if dragging and (
-					input.UserInputType == Enum.UserInputType.MouseMovement
-					or input.UserInputType == Enum.UserInputType.Touch
-				) then updateFromInput(input) end
+				if activeInput and input == activeInput then
+					updateFromPos(input.Position.X)
+				end
 			end)
 			UserInputService.InputEnded:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1
-				or input.UserInputType == Enum.UserInputType.Touch then
-					dragging = false
+				if activeInput and input == activeInput then
+					endDrag()
 				end
 			end)
 
 			return {
-				Set = function(_, v: number) setValue(v, true) end,
+				Set = function(_, v: number) setValue(v, true, true) end,
 				Get = function() return value end,
 			}
 		end
@@ -1222,7 +1305,7 @@ function AsusLib:CreateWindow(title: string)
 		function TabObj:CreateButton(opts: { Name: string, Description: string?, Callback: (() -> ())? })
 			local cb = opts.Callback or function() end
 			local Card = new("TextButton", {
-				Size                   = UDim2.new(1, 0, 0, 50),
+				Size                   = UDim2.new(1, 0, 0, IsMobile and 46 or 50),
 				BackgroundColor3       = THEME.Card,
 				AutoButtonColor        = false,
 				BorderSizePixel        = 0,
@@ -1231,6 +1314,7 @@ function AsusLib:CreateWindow(title: string)
 				Parent                 = Page,
 			})
 			corner(10, Card)
+			stroke(THEME.BorderSoft, 1, Card, 0.92)
 
 			new("TextLabel", {
 				Size                   = UDim2.new(1, -32, 0, 20),
@@ -1239,7 +1323,7 @@ function AsusLib:CreateWindow(title: string)
 				Text                   = opts.Name,
 				TextColor3             = THEME.Text,
 				Font                   = Enum.Font.GothamBold,
-				TextSize               = 15,
+				TextSize               = IsMobile and 14 or 15,
 				TextXAlignment         = Enum.TextXAlignment.Left,
 				Parent                 = Card,
 			})
@@ -1251,7 +1335,7 @@ function AsusLib:CreateWindow(title: string)
 					Text                   = opts.Description,
 					TextColor3             = THEME.SubText,
 					Font                   = Enum.Font.Gotham,
-					TextSize               = 12,
+					TextSize               = IsMobile and 11 or 12,
 					TextXAlignment         = Enum.TextXAlignment.Left,
 					Parent                 = Card,
 				})
