@@ -5,7 +5,9 @@
 	- Shadcn-accurate Switch (track 44x24 / thumb 20x20 with proper padding)
 	- Pixel-perfect Slider (tracks the exact InputObject for no drift on mobile)
 	- Solid dark theme matching the reference design
-	- Real frame-drawn icons (no asset IDs, always render)
+	- Lucide icon pack (same rbxassetid library Fluent UI uses) — accepts
+	  any Lucide name ("eye", "swords", "chevron-down", ...) OR a raw
+	  "rbxassetid://..." string for custom images.
 	- Scrollable sidebar + scrollable tab pages
 	- Notification system (top-right toasts)
 	- K to toggle visibility on PC, floating circle to restore on mobile
@@ -20,7 +22,13 @@
 		Visuals:CreateSlider({ Name="Range (studs)", Min=0, Max=100, Default=30, Callback=function(v) end })
 		Kaizen:Notify({ Title = "Loaded", Text = "Welcome to Kaizen Hub" })
 
-	Icons: eye, swords, users, basket, settings, x, minus, home, bell
+	Built-in legacy icon names (aliased to Lucide):
+		eye, swords, users, basket, settings, x, minus, home, bell
+	Any Lucide icon name also works, e.g.:
+		"sword", "shield", "target", "zap", "crosshair", "shopping-bag",
+		"user", "user-plus", "trophy", "star", "heart", "flame",
+		"chevron-down", "chevron-up", "arrow-right", "info", "check",
+		"alert-triangle", "search", "settings-2", "bell-ring", ...
 --]]
 
 local Players          = game:GetService("Players")
@@ -199,203 +207,151 @@ local function getParent(): Instance
 end
 
 -- ==========================================================================
--- ICONS (drawn with native Frames)
+-- ICONS (Lucide icon pack — same source Fluent UI uses)
+-- Each icon is rendered as an ImageLabel using a single rbxassetid, so
+-- Roblox can color it via ImageColor3 (no hand-drawn shapes).
+--
+-- At startup we try to load the full Lucide asset table from Fluent's
+-- upstream Icons.lua (hundreds of icons). If that fails (e.g. HttpGet is
+-- blocked or the remote is unreachable), we fall back to the inline table
+-- below which already contains every icon this library uses internally.
+--
+-- Accepted icon names:
+--   - Plain lucide name      : "eye", "settings-2", "chevron-down"
+--   - Fully-qualified name   : "lucide-eye", "lucide-chevron-down"
+--   - Legacy alias           : "basket"  -> lucide-shopping-bag
+--                              "swords"  -> lucide-swords
+--                              "x"       -> lucide-x (etc.)
+--   - Raw asset URL          : "rbxassetid://10723346959"  (passed through)
 -- ==========================================================================
-local function iconContainer(parent: Instance, size: number?): Frame
-	return (new("Frame", {
-		Name = "Icon",
-		Size = UDim2.fromOffset(size or 20, size or 20),
-		BackgroundTransparency = 1,
-		Parent = parent,
-	}) :: any) :: Frame
-end
 
-local function line(parent: Instance, color: Color3, x: number, y: number, w: number, h: number, rot: number?)
-	local f = new("Frame", {
-		Size                   = UDim2.fromOffset(w, h),
-		Position               = UDim2.new(0.5, x, 0.5, y),
-		AnchorPoint            = Vector2.new(0.5, 0.5),
-		BackgroundColor3       = color,
-		BorderSizePixel        = 0,
-		Rotation               = rot or 0,
-		Parent                 = parent,
-	})
-	corner(math.min(w, h) / 2, f)
-	return f
-end
+-- Inline fallback: guaranteed to cover every icon this UI ships with so
+-- the library still looks correct even if the remote fetch fails.
+local INLINE_LUCIDE: {[string]: string} = {
+	["lucide-eye"]             = "rbxassetid://10723346959",
+	["lucide-swords"]          = "rbxassetid://10734975692",
+	["lucide-users"]           = "rbxassetid://10747373426",
+	["lucide-shopping-bag"]    = "rbxassetid://10734952273",
+	["lucide-shopping-cart"]   = "rbxassetid://10734952479",
+	["lucide-settings"]        = "rbxassetid://10734950309",
+	["lucide-settings-2"]      = "rbxassetid://10734950020",
+	["lucide-x"]               = "rbxassetid://10747384394",
+	["lucide-minus"]           = "rbxassetid://10734896206",
+	["lucide-home"]            = "rbxassetid://10723407389",
+	["lucide-bell"]            = "rbxassetid://10709775704",
+	["lucide-bell-ring"]       = "rbxassetid://10709775560",
+	["lucide-chevron-down"]    = "rbxassetid://10709790948",
+	["lucide-chevron-up"]      = "rbxassetid://10709791523",
+	["lucide-chevron-left"]    = "rbxassetid://10709791281",
+	["lucide-chevron-right"]   = "rbxassetid://10709791437",
+	["lucide-check"]           = "rbxassetid://10709790644",
+	["lucide-search"]          = "rbxassetid://10747386065",
+	["lucide-info"]            = "rbxassetid://10723415903",
+	["lucide-alert-triangle"]  = "rbxassetid://10709753149",
+	["lucide-alert-circle"]    = "rbxassetid://10709752996",
+}
 
-local function ring(parent: Instance, color: Color3, x: number, y: number, w: number, h: number, thickness: number)
-	local f = new("Frame", {
-		Size                   = UDim2.fromOffset(w, h),
-		Position               = UDim2.new(0.5, x, 0.5, y),
-		AnchorPoint            = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Parent                 = parent,
-	})
-	corner(math.max(w, h), f)
-	stroke(color, thickness, f)
-	return f
-end
+-- Legacy short-name aliases used throughout this library (and by downstream
+-- scripts that already pass "eye", "basket", etc.) -> canonical lucide name.
+local ICON_ALIASES: {[string]: string} = {
+	-- legacy/short names used by this UI
+	eye      = "lucide-eye",
+	swords   = "lucide-swords",
+	users    = "lucide-users",
+	basket   = "lucide-shopping-bag",   -- lucide has no "basket"; bag is closest
+	settings = "lucide-settings",
+	x        = "lucide-x",
+	minus    = "lucide-minus",
+	home     = "lucide-home",
+	bell     = "lucide-bell",
+}
 
-local function dot(parent: Instance, color: Color3, x: number, y: number, size: number)
-	local f = new("Frame", {
-		Size                   = UDim2.fromOffset(size, size),
-		Position               = UDim2.new(0.5, x, 0.5, y),
-		AnchorPoint            = Vector2.new(0.5, 0.5),
-		BackgroundColor3       = color,
-		BorderSizePixel        = 0,
-		Parent                 = parent,
-	})
-	corner(size, f)
-	return f
-end
+-- Pull the full Lucide asset map from Fluent's upstream Icons.lua once.
+-- Using loadstring keeps us compatible with the `return { assets = {...} }`
+-- module shape that Fluent ships.
+local LUCIDE_REMOTE_URL =
+	"https://raw.githubusercontent.com/dawid-scripts/Fluent/master/src/Icons.lua"
 
-local ICON_DRAWERS: {[string]: (Frame, Color3) -> ()} = {}
+local LucideMap: {[string]: string} = {}
+do
+	-- seed with inline fallback first
+	for k, v in pairs(INLINE_LUCIDE) do LucideMap[k] = v end
 
-ICON_DRAWERS.x = function(c, color)
-	line(c, color, 0, 0, 18, 2, 45)
-	line(c, color, 0, 0, 18, 2, -45)
-end
-
-ICON_DRAWERS.minus = function(c, color)
-	line(c, color, 0, 0, 14, 2, 0)
-end
-
-ICON_DRAWERS.home = function(c, color)
-	line(c, color, -4, -4, 12, 2, 45)
-	line(c, color,  4, -4, 12, 2, -45)
-	local base = new("Frame", {
-		Size = UDim2.fromOffset(12, 10),
-		Position = UDim2.new(0.5, 0, 0.5, 3),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Parent = c,
-	})
-	corner(2, base)
-	stroke(color, 1.6, base)
-end
-
-ICON_DRAWERS.bell = function(c, color)
-	local body = new("Frame", {
-		Size = UDim2.fromOffset(14, 14),
-		Position = UDim2.new(0.5, 0, 0.5, -1),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Parent = c,
-	})
-	corner(7, body)
-	stroke(color, 1.6, body)
-	line(c, color, 0, 7, 6, 2, 0)
-	dot(c, color, 0, 9, 2)
-end
-
-ICON_DRAWERS.eye = function(c, color)
-	local lens = new("Frame", {
-		Size                   = UDim2.fromOffset(18, 12),
-		Position               = UDim2.new(0.5, 0, 0.5, 0),
-		AnchorPoint            = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Parent                 = c,
-	})
-	corner(6, lens)
-	stroke(color, 1.6, lens)
-	ring(c, color, 0, 0, 7, 7, 1.6)
-	dot(c, color, 0, 0, 3)
-end
-
-ICON_DRAWERS.swords = function(c, color)
-	line(c, color, -1, -1, 16, 2, 45)
-	line(c, color, 1, -1, 16, 2, -45)
-	line(c, color, -6, -6, 5, 2, -45)
-	line(c, color, 6, -6, 5, 2, 45)
-	dot(c, color, -7, 7, 3)
-	dot(c, color, 7, 7, 3)
-end
-
-ICON_DRAWERS.users = function(c, color)
-	ring(c, color, -3, -4, 6, 6, 1.6)
-	ring(c, color, 4, -4, 6, 6, 1.6)
-	local b1 = new("Frame", {
-		Size                   = UDim2.fromOffset(10, 6),
-		Position               = UDim2.new(0.5, -3, 0.5, 4),
-		AnchorPoint            = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Parent                 = c,
-	})
-	corner(4, b1)
-	stroke(color, 1.6, b1)
-	local b2 = new("Frame", {
-		Size                   = UDim2.fromOffset(10, 6),
-		Position               = UDim2.new(0.5, 4, 0.5, 4),
-		AnchorPoint            = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Parent                 = c,
-	})
-	corner(4, b2)
-	stroke(color, 1.6, b2)
-end
-
-ICON_DRAWERS.basket = function(c, color)
-	local handle = new("Frame", {
-		Size                   = UDim2.fromOffset(10, 8),
-		Position               = UDim2.new(0.5, 0, 0.5, -3),
-		AnchorPoint            = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Parent                 = c,
-	})
-	corner(6, handle)
-	stroke(color, 1.6, handle)
-	line(c, color, 0, 1, 18, 2, 0)
-	local body = new("Frame", {
-		Size                   = UDim2.fromOffset(16, 8),
-		Position               = UDim2.new(0.5, 0, 0.5, 5),
-		AnchorPoint            = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Parent                 = c,
-	})
-	corner(2, body)
-	stroke(color, 1.6, body)
-	line(c, color, -4, 5, 1.4, 6, 0)
-	line(c, color, 0,  5, 1.4, 6, 0)
-	line(c, color, 4,  5, 1.4, 6, 0)
-end
-
-ICON_DRAWERS.settings = function(c, color)
-	ring(c, color, 0, 0, 8, 8, 1.6)
-	dot(c, color, 0, 0, 2)
-	local radius = 7
-	for i = 0, 7 do
-		local angle = math.rad(i * 45)
-		local x = math.cos(angle) * radius
-		local y = math.sin(angle) * radius
-		local tooth = new("Frame", {
-			Size                   = UDim2.fromOffset(3, 3),
-			Position               = UDim2.new(0.5, x, 0.5, y),
-			AnchorPoint            = Vector2.new(0.5, 0.5),
-			BackgroundColor3       = color,
-			BorderSizePixel        = 0,
-			Rotation               = i * 45,
-			Parent                 = c,
-		})
-		corner(1, tooth)
-	end
-end
-
-local function drawIcon(parent: Instance, name: string, color: Color3, size: number?): Frame
-	local c = iconContainer(parent, size)
-	local drawer = ICON_DRAWERS[name]
-	if drawer then drawer(c, color) end
-	return c
-end
-
-local function recolorIcon(container: Frame, name: string, color: Color3)
-	for _, child in ipairs(container:GetChildren()) do
-		if not child:IsA("UICorner") and not child:IsA("UIStroke") then
-			child:Destroy()
+	local ok, result = pcall(function()
+		local src = game:HttpGet(LUCIDE_REMOTE_URL, true)
+		local loader = loadstring or (getfenv and getfenv().loadstring)
+		if not loader then return nil end
+		local chunk = loader(src)
+		if not chunk then return nil end
+		local mod = chunk()
+		if typeof(mod) == "table" and typeof(mod.assets) == "table" then
+			return mod.assets
+		end
+		return nil
+	end)
+	if ok and typeof(result) == "table" then
+		for k, v in pairs(result) do
+			if typeof(k) == "string" and typeof(v) == "string" then
+				LucideMap[k] = v
+			end
 		end
 	end
-	local drawer = ICON_DRAWERS[name]
-	if drawer then drawer(container, color) end
+end
+
+-- Resolve a user-provided icon name to a rbxassetid URL.
+-- Returns nil if no matching icon is found.
+local function resolveIcon(name: string?): string?
+	if not name or name == "" then return nil end
+	-- Raw asset URL passthrough
+	if string.match(name, "^rbxassetid://") or string.match(name, "^rbxasset://") then
+		return name
+	end
+	-- Alias -> canonical
+	local canonical = ICON_ALIASES[name] or name
+	-- Already fully-qualified?
+	if LucideMap[canonical] then return LucideMap[canonical] end
+	-- Try the "lucide-" prefix if the caller gave us a bare lucide name
+	local prefixed = "lucide-" .. canonical
+	if LucideMap[prefixed] then return LucideMap[prefixed] end
+	return nil
+end
+
+-- Creates the ImageLabel for the icon and parents it to `parent`.
+-- Returns the ImageLabel so callers can tweak .Size / .Position / .AnchorPoint
+-- exactly like they did with the old Frame-based icons.
+local function drawIcon(parent: Instance, name: string, color: Color3, size: number?): ImageLabel
+	local px = size or 20
+	local url = resolveIcon(name)
+	local img = new("ImageLabel", {
+		Name                   = "Icon",
+		Size                   = UDim2.fromOffset(px, px),
+		BackgroundTransparency = 1,
+		BorderSizePixel        = 0,
+		Image                  = url or "",
+		ImageColor3            = color,
+		ImageTransparency      = url and 0 or 1,
+		ScaleType              = Enum.ScaleType.Fit,
+		Parent                 = parent,
+	})
+	return img
+end
+
+-- Updates the icon (and/or its color) in-place. Finds the existing
+-- ImageLabel parented to `container` and swaps its Image / ImageColor3,
+-- so animations / layout attributes (Size, AnchorPoint, ...) are preserved.
+local function recolorIcon(container: Instance, name: string, color: Color3)
+	local img = container:FindFirstChildWhichIsA("ImageLabel")
+	if not img then
+		-- No existing icon on this container — create one.
+		drawIcon(container, name, color, 20)
+		return
+	end
+	local url = resolveIcon(name)
+	if url then
+		img.Image             = url
+		img.ImageTransparency = 0
+	end
+	img.ImageColor3 = color
 end
 
 -- ==========================================================================
@@ -1683,17 +1639,10 @@ function AsusLib:CreateWindow(title: string)
 				Parent                 = Button,
 			})
 
-			local Chevron = new("TextLabel", {
-				Size                   = UDim2.fromOffset(20, 20),
-				Position               = UDim2.new(1, -24, 0.5, 0),
-				AnchorPoint            = Vector2.new(0, 0.5),
-				BackgroundTransparency = 1,
-				Text                   = "v",
-				TextColor3             = THEME.SubText,
-				Font                   = Enum.Font.GothamBold,
-				TextSize               = 12,
-				Parent                 = Button,
-			})
+			local Chevron = drawIcon(Button, "chevron-down", THEME.SubText, 16)
+			Chevron.Size        = UDim2.fromOffset(16, 16)
+			Chevron.Position    = UDim2.new(1, -22, 0.5, 0)
+			Chevron.AnchorPoint = Vector2.new(0, 0.5)
 
 			-- Scrollable list that expands inside the card
 			local ListBox = new("ScrollingFrame", {
