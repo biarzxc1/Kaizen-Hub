@@ -631,58 +631,32 @@ function KaizenUI:CreateWindow(opts)
         tween(Hamburger, 0.15, { BackgroundTransparency = 1 })
     end)
 
-    -- Branded logo badge
-    local LogoWrap = new("Frame", {
-        AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 0, 0.5, 0),
-        Size = UDim2.fromOffset(34, 34),
-        BackgroundTransparency = 1,
-        Active = true,              -- consume input so game doesn't receive click
-        Parent = TopBar,
-    })
-    local LogoBadge, LogoImg = makeLogoBadge(LogoWrap, 34, logoId)
-    LogoBadge.Size = UDim2.fromScale(1, 1)
-    LogoBadge.Active = true
-    -- Also put an invisible ImageButton on top so every click/touch on the
-    -- logo is absorbed (Frames pass touch events through on some devices).
-    local LogoHit = new("ImageButton", {
-        Size = UDim2.fromScale(1, 1),
-        BackgroundTransparency = 1,
-        Image = "",
-        AutoButtonColor = false,
-        Parent = LogoWrap,
-        ZIndex = 5,
-    })
-    LogoHit.MouseButton1Click:Connect(function() end) -- intentionally empty
+    -- Single pipe-separated title string, e.g.
+    --   "KaizenHub | Survive the Apocalypse Delta | Delta"
+    -- This matches the design reference exactly (no logo badge).
+    local function composeTitle(t, s)
+        if s and s ~= "" then return (t or "") .. "  |  " .. s end
+        return t or ""
+    end
 
     local TitleLbl = new("TextLabel", {
         Name = "Title",
         AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 46, 0.5, 0),
-        Size = UDim2.fromOffset(120, 22),
+        Position = UDim2.new(0, 0, 0.5, 0),
+        Size = UDim2.new(1, -80, 0, 22),
         BackgroundTransparency = 1,
-        Text = title,
+        Text = composeTitle(title, subtitle),
         TextColor3 = Theme.Text,
         Font = FontBold,
         TextSize = 16,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = TopBar,
-    })
-
-    local SubLbl = new("TextLabel", {
-        Name = "Subtitle",
-        AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 172, 0.5, 0),
-        Size = UDim2.new(1, -260, 0, 18),
-        BackgroundTransparency = 1,
-        Text = subtitle,
-        TextColor3 = Theme.SubText,
-        Font = FontSans,
-        TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd,
         Parent = TopBar,
     })
+
+    -- Kept for API compatibility with older code paths; not rendered.
+    -- (Previously a separate label — now merged into TitleLbl above.)
+    local SubLbl = TitleLbl
 
     -- Window control buttons (minimize + close) — minimal, flat
     local function makeIconBtn(key, xOffset)
@@ -913,8 +887,6 @@ function KaizenUI:CreateWindow(opts)
         local narrow = touch or small
         narrowState  = narrow
 
-        SubLbl.Visible = subtitle ~= "" and (narrow and vp.X >= 560 or vp.X >= 720)
-
         if narrow then
             topBarH = 54
 
@@ -936,17 +908,12 @@ function KaizenUI:CreateWindow(opts)
             Content.Position = UDim2.new(0, 0, 0, topBarH)
             Content.Size     = UDim2.new(1, 0, 1, -topBarH)
 
-            -- Hamburger visible, logo + title shifted to make room for it.
+            -- Hamburger visible on mobile, title starts after it.
             Hamburger.Visible  = true
             Hamburger.Position = UDim2.new(0, 0, 0.5, 0)
-            LogoWrap.Position  = UDim2.new(0, 44, 0.5, 0)
-            LogoWrap.Size      = UDim2.fromOffset(32, 32)
-            TitleLbl.Position  = UDim2.new(0, 86, 0.5, 0)
-            TitleLbl.TextSize  = 15
-            TitleLbl.Size      = UDim2.fromOffset(110, 20)
-            SubLbl.Position    = UDim2.new(0, 202, 0.5, 0)
-            SubLbl.Size        = UDim2.new(1, -240, 0, 16)
-            SubLbl.TextSize    = 12
+            TitleLbl.Position  = UDim2.new(0, 46, 0.5, 0)
+            TitleLbl.TextSize  = 14
+            TitleLbl.Size      = UDim2.new(1, -120, 0, 20)
 
             -- Larger, finger-friendly window controls (close + minimize).
             CloseBtn.Size = UDim2.fromOffset(32, 32)
@@ -986,14 +953,9 @@ function KaizenUI:CreateWindow(opts)
             Scrim.Visible     = false
             Scrim.BackgroundTransparency = 1
 
-            LogoWrap.Position = UDim2.new(0, 0, 0.5, 0)
-            LogoWrap.Size     = UDim2.fromOffset(34, 34)
-            TitleLbl.Position = UDim2.new(0, 46, 0.5, 0)
-            TitleLbl.Size     = UDim2.fromOffset(120, 22)
+            TitleLbl.Position = UDim2.new(0, 0, 0.5, 0)
+            TitleLbl.Size     = UDim2.new(1, -80, 0, 22)
             TitleLbl.TextSize = 16
-            SubLbl.Position   = UDim2.new(0, 172, 0.5, 0)
-            SubLbl.Size       = UDim2.new(1, -260, 0, 18)
-            SubLbl.TextSize   = 13
 
             CloseBtn.Size = UDim2.fromOffset(26, 26)
             MinBtn.Size   = UDim2.fromOffset(26, 26)
@@ -1047,41 +1009,26 @@ function KaizenUI:CreateWindow(opts)
     function Window:HideStatus() end
 
     ----------------------------------------------------------------
-    -- Page title block ("Visuals / Adjust visual enhancements...")
+    -- Page title block — just the big bold title, matching the design.
+    -- (No subtitle, no divider line — section labels from AddSection
+    --  act as the inline separators now.)
     ----------------------------------------------------------------
-    local function buildPageHeader(page, name, desc)
+    local function buildPageHeader(page, name, _desc)
         local Header = new("Frame", {
-            Size = UDim2.new(1, 0, 0, 62),
+            Size = UDim2.new(1, 0, 0, 38),
             BackgroundTransparency = 1,
             LayoutOrder = -1000,
             Parent = page,
         })
         new("TextLabel", {
-            Size = UDim2.new(1, 0, 0, 28),
+            Size = UDim2.new(1, 0, 1, 0),
             BackgroundTransparency = 1,
             Text = name,
             TextColor3 = Theme.Text,
             Font = FontBold,
             TextSize = 24,
             TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = Header,
-        })
-        new("TextLabel", {
-            Position = UDim2.fromOffset(0, 32),
-            Size = UDim2.new(1, 0, 0, 16),
-            BackgroundTransparency = 1,
-            Text = desc or "",
-            TextColor3 = Theme.SubText,
-            Font = FontSans,
-            TextSize = 13,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = Header,
-        })
-        new("Frame", {
-            Position = UDim2.new(0, 0, 1, -1),
-            Size = UDim2.new(1, 0, 0, 1),
-            BackgroundColor3 = Theme.Divider,
-            BorderSizePixel = 0,
+            TextYAlignment = Enum.TextYAlignment.Center,
             Parent = Header,
         })
     end
@@ -1089,15 +1036,15 @@ function KaizenUI:CreateWindow(opts)
     local function selectTab(tab)
         if Window._activeTab == tab then return end
         for _, t in ipairs(Window._ordered) do
-            tween(t._button, 0.15, { BackgroundTransparency = 1 })
             tween(t._label,  0.15, { TextColor3 = Theme.SubText })
             tween(t._icon,   0.15, { ImageColor3 = Theme.SubText })
+            tween(t._bar,    0.15, { BackgroundTransparency = 1 })
             t._page.Visible = false
         end
         Window._activeTab = tab
-        tween(tab._button, 0.18, { BackgroundColor3 = Theme.Active, BackgroundTransparency = 0 })
         tween(tab._label,  0.18, { TextColor3 = Theme.Text })
         tween(tab._icon,   0.18, { ImageColor3 = Theme.Text })
+        tween(tab._bar,    0.18, { BackgroundTransparency = 0 })
         tab._page.Visible = true
     end
 
@@ -1110,10 +1057,11 @@ function KaizenUI:CreateWindow(opts)
         local Tab = {}
         Tab.Name = name
 
-        -- Sidebar button — 44px tall for comfortable touch targets.
+        -- Sidebar button — flat row, 44px for comfortable touch targets.
+        -- No filled pill; the active state is shown by a tiny vertical
+        -- accent bar on the far left (matches the design reference).
         local Btn = new("TextButton", {
             Size = UDim2.new(1, 0, 0, 44),
-            BackgroundColor3 = Theme.Active,
             BackgroundTransparency = 1,
             AutoButtonColor = false,
             Active = true,
@@ -1121,11 +1069,22 @@ function KaizenUI:CreateWindow(opts)
             BorderSizePixel = 0,
             Parent = TabList,
         })
-        corner(Btn, 10)
+
+        -- Active indicator: thin vertical bar on the far-left edge.
+        local ActiveBar = new("Frame", {
+            AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(0, 0, 0.5, 0),
+            Size = UDim2.fromOffset(3, 20),
+            BackgroundColor3 = Theme.Text,
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Parent = Btn,
+        })
+        corner(ActiveBar, 2)
 
         local IconImg = new("ImageLabel", {
             AnchorPoint = Vector2.new(0, 0.5),
-            Position = UDim2.new(0, 12, 0.5, 0),
+            Position = UDim2.new(0, 14, 0.5, 0),
             Size = UDim2.fromOffset(18, 18),
             BackgroundTransparency = 1,
             Image = resolveIcon(iconKey),
@@ -1135,13 +1094,13 @@ function KaizenUI:CreateWindow(opts)
 
         local Lbl = new("TextLabel", {
             AnchorPoint = Vector2.new(0, 0.5),
-            Position = UDim2.new(0, 40, 0.5, 0),
+            Position = UDim2.new(0, 42, 0.5, 0),
             Size = UDim2.new(1, -46, 1, 0),
             BackgroundTransparency = 1,
-            Text = name,
+            Text = "| " .. name,
             TextColor3 = Theme.SubText,
             Font = FontSemi,
-            TextSize = 14,
+            TextSize = 15,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextTruncate = Enum.TextTruncate.AtEnd,
             Parent = Btn,
@@ -1149,14 +1108,12 @@ function KaizenUI:CreateWindow(opts)
 
         Btn.MouseEnter:Connect(function()
             if Window._activeTab ~= Tab then
-                tween(Btn, 0.15, { BackgroundColor3 = Theme.Hover, BackgroundTransparency = 0 })
                 tween(Lbl, 0.15, { TextColor3 = Theme.Text })
                 tween(IconImg, 0.15, { ImageColor3 = Theme.Text })
             end
         end)
         Btn.MouseLeave:Connect(function()
             if Window._activeTab ~= Tab then
-                tween(Btn, 0.15, { BackgroundTransparency = 1 })
                 tween(Lbl, 0.15, { TextColor3 = Theme.SubText })
                 tween(IconImg, 0.15, { ImageColor3 = Theme.SubText })
             end
@@ -1187,6 +1144,7 @@ function KaizenUI:CreateWindow(opts)
         Tab._button = Btn
         Tab._icon   = IconImg
         Tab._label  = Lbl
+        Tab._bar    = ActiveBar
         Tab._page   = Page
 
         Btn.MouseButton1Click:Connect(function()
@@ -1214,19 +1172,24 @@ function KaizenUI:CreateWindow(opts)
             contLayout.Parent = Container
 
             if sectionName and sectionName ~= "" then
+                -- Plain inline section label (no card, no divider) — matches
+                -- the "Kill Aura", "Esp all Crates in map" labels in the
+                -- design reference.
                 local Header = new("Frame", {
-                    Size = UDim2.new(1, 0, 0, 24),
+                    Size = UDim2.new(1, 0, 0, 28),
                     BackgroundTransparency = 1,
                     LayoutOrder = 0,
                     Parent = Container,
                 })
                 new("TextLabel", {
-                    Size = UDim2.new(1, 0, 1, 0),
+                    AnchorPoint = Vector2.new(0, 1),
+                    Position = UDim2.new(0, 0, 1, -2),
+                    Size = UDim2.new(1, 0, 0, 22),
                     BackgroundTransparency = 1,
                     Text = sectionName,
                     TextColor3 = Theme.Text,
                     Font = FontBold,
-                    TextSize = 14,
+                    TextSize = 16,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     Parent = Header,
                 })
@@ -1360,38 +1323,60 @@ function KaizenUI:CreateWindow(opts)
                 local round   = tonumber(o.Rounding) or 0
                 local default = math.clamp(tonumber(o.Default) or min, min, max)
 
-                local Card = makeCard(72) -- bigger card => bigger touch area
+                local hasDesc = o.Description and o.Description ~= ""
+                -- Taller card when there's a description (title + desc + track).
+                local Card = makeCard(hasDesc and 86 or 66)
 
+                -- Title (top-left)
                 local Title = new("TextLabel", {
-                    Size = UDim2.new(1, -80, 0, 18),
+                    Size = UDim2.new(0.55, -8, 0, 18),
+                    Position = UDim2.fromOffset(0, 0),
                     BackgroundTransparency = 1,
                     Text = o.Title or id or "Slider",
                     TextColor3 = Theme.Text,
                     Font = FontBold,
                     TextSize = 14,
                     TextXAlignment = Enum.TextXAlignment.Left,
+                    TextTruncate = Enum.TextTruncate.AtEnd,
                     Parent = Card,
                 })
+                if hasDesc then
+                    new("TextLabel", {
+                        Size = UDim2.new(0.55, -8, 0, 32),
+                        Position = UDim2.fromOffset(0, 20),
+                        BackgroundTransparency = 1,
+                        Text = o.Description,
+                        TextColor3 = Theme.SubText,
+                        Font = FontSans,
+                        TextSize = 12,
+                        TextWrapped = true,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        TextYAlignment = Enum.TextYAlignment.Top,
+                        Parent = Card,
+                    })
+                end
+
+                -- Value label on the LEFT of the track (matches design ref).
                 local ValueLbl = new("TextLabel", {
-                    AnchorPoint = Vector2.new(1, 0),
-                    Position = UDim2.new(1, 0, 0, 0),
-                    Size = UDim2.fromOffset(74, 18),
+                    AnchorPoint = Vector2.new(0, 0.5),
+                    Position = UDim2.new(0.55, 0, 0.5, 0),
+                    Size = UDim2.fromOffset(44, 20),
                     BackgroundTransparency = 1,
                     Text = tostring(default),
                     TextColor3 = Theme.Text,
                     Font = FontSemi,
                     TextSize = 13,
-                    TextXAlignment = Enum.TextXAlignment.Right,
+                    TextXAlignment = Enum.TextXAlignment.Left,
                     Parent = Card,
                 })
 
-                -- Hit area: a tall, invisible TextButton wrapping the track.
-                -- A bigger hit area + handling MouseMovement / Touch on the
-                -- element itself (rather than UserInputService globally) makes
-                -- the slider feel smooth on both desktop and mobile.
+                -- Hit area wraps the track on the RIGHT half of the card.
+                -- Using MouseMovement / Touch on the element itself (rather
+                -- than global InputService) makes it smooth on mobile.
                 local Hit = new("TextButton", {
-                    Position = UDim2.fromOffset(0, 22),
-                    Size = UDim2.new(1, 0, 0, 36),
+                    AnchorPoint = Vector2.new(1, 0.5),
+                    Position = UDim2.new(1, 0, 0.5, 0),
+                    Size = UDim2.new(0.45, -52, 0, 36),
                     BackgroundTransparency = 1,
                     Text = "",
                     AutoButtonColor = false,
