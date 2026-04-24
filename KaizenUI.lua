@@ -1,14 +1,16 @@
 --[[
-    KaizenUI — a glassmorphism, Fluent-API-compatible UI library for Roblox.
+    KaizenUI v2 — a flat, solid, Fluent-API-compatible UI library for Roblox.
 
-      • Drop-in replacement for `Fluent`: CreateWindow / AddTab / AddSection /
-        AddToggle / AddSlider / AddDropdown / AddInput / AddButton / AddParagraph
-        / Notify / Options / SelectTab.
-      • Modern dark glass theme with subtle strokes and rounded corners.
-      • Built-in branded loader animation (rotating ring + logo).
-      • Touch-first sliders that drag reliably on mobile.
+      • Drop-in replacement for `Fluent`:
+          CreateWindow / AddTab / AddSection /
+          AddToggle / AddSlider / AddDropdown / AddInput / AddButton /
+          AddParagraph / Notify / Options / SelectTab.
+      • Modern flat dark theme (no glassmorphism, no blur).
+      • Smooth responsive sizing for PC, laptop and mobile.
+      • Branded loader splash + in-window "Injecting..." status pill.
+      • Dotted rotating ring spinner.
+      • Touch-first sliders and scrollable pages.
       • Draggable window + draggable minimized logo pill.
-      • Scrollable sidebar and content pages.
       • Uses your logo (rbxassetid://124205601170943) and Lucide icons.
 
     Usage:
@@ -19,11 +21,13 @@
       KaizenUI:Loader({ Title = "Kaizen Hub", Subtitle = "Loading scripts...", Duration = 2 })
 
       local Window = KaizenUI:CreateWindow({
-          Title = "Kaizen Hub", SubTitle = "v1.0.0", TabWidth = 160,
+          Title = "KaizenHub",
+          SubTitle = "[ UPD ] · A Sobreviva o Apocalipse · Delta",
+          TabWidth = 180,
       })
-      local Tab     = Window:AddTab({ Title = "Combat", Icon = "crosshair" })
-      local Section = Tab:AddSection("Aim")
-      Section:AddToggle("KillAura", { Title = "Kill Aura", Default = false, Callback = function(v) end })
+      local Tab     = Window:AddTab({ Title = "Visuals", Icon = "eye" })
+      local Section = Tab:AddSection("ESP")
+      Section:AddToggle("ItemESP", { Title = "Item ESP", Description = "Highlights items in the world.", Callback = function(v) end })
 ]]
 
 ----------------------------------------------------------------
@@ -40,23 +44,25 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui   = LocalPlayer and LocalPlayer:WaitForChild("PlayerGui", 5) or nil
 
 ----------------------------------------------------------------
--- Theme (glassmorphism dark)
+-- Theme (flat dark, no glassmorphism)
 ----------------------------------------------------------------
 local Theme = {
-    Background     = Color3.fromRGB(10, 10, 12),     -- window shell
-    Glass          = Color3.fromRGB(18, 18, 22),     -- frosted surface
-    GlassStrong    = Color3.fromRGB(24, 24, 28),     -- sidebar / stronger glass
-    Card           = Color3.fromRGB(20, 20, 24),     -- option cards
-    CardHover      = Color3.fromRGB(28, 28, 32),
-    SidebarActive  = Color3.fromRGB(32, 32, 38),
-    Border         = Color3.fromRGB(48, 48, 56),
-    BorderSubtle   = Color3.fromRGB(32, 32, 38),
+    Background     = Color3.fromRGB(16, 16, 18),     -- main window
+    Surface        = Color3.fromRGB(16, 16, 18),     -- sidebar (matches bg for seamless look)
+    Elevated       = Color3.fromRGB(24, 24, 28),     -- cards / raised controls
+    Hover          = Color3.fromRGB(30, 30, 34),
+    Active         = Color3.fromRGB(34, 34, 40),     -- active sidebar item
+    LogoBG         = Color3.fromRGB(26, 26, 30),     -- logo backplate
+    Border         = Color3.fromRGB(38, 38, 44),
+    BorderSubtle   = Color3.fromRGB(28, 28, 32),
+    Divider        = Color3.fromRGB(36, 36, 42),
     Text           = Color3.fromRGB(245, 245, 250),
     SubText        = Color3.fromRGB(161, 161, 170),
     Muted          = Color3.fromRGB(115, 115, 125),
     Accent         = Color3.fromRGB(255, 255, 255),
-    ToggleOff      = Color3.fromRGB(44, 44, 52),
+    ToggleOff      = Color3.fromRGB(48, 48, 54),
     ToggleOn       = Color3.fromRGB(240, 240, 245),
+    SliderTrack    = Color3.fromRGB(38, 38, 44),
     SliderFill     = Color3.fromRGB(240, 240, 245),
     Danger         = Color3.fromRGB(239, 68, 68),
     Success        = Color3.fromRGB(34, 197, 94),
@@ -65,33 +71,34 @@ local Theme = {
 
 local FontSans = Enum.Font.Gotham
 local FontBold = Enum.Font.GothamBold
+local FontSemi = Enum.Font.GothamMedium
 
 ----------------------------------------------------------------
 -- Icons (Lucide — asset IDs resolved from the Icons library)
 ----------------------------------------------------------------
 local Icons = {
-    activity     = "rbxassetid://10709752035",
-    backpack     = "rbxassetid://10709769841",
+    activity         = "rbxassetid://10709752035",
+    backpack         = "rbxassetid://10709769841",
     ["chevron-down"] = "rbxassetid://10709790948",
     ["chevron-up"]   = "rbxassetid://10709791523",
-    cog          = "rbxassetid://10709810948",
-    crosshair    = "rbxassetid://10709818534",
-    eye          = "rbxassetid://10723346959",
-    info         = "rbxassetid://10723415903",
-    loader       = "rbxassetid://10723434070",
-    minus        = "rbxassetid://10734896206",
-    package      = "rbxassetid://10734909540",
-    refresh      = "rbxassetid://10734933222",
-    ["refresh-cw"] = "rbxassetid://10734933222",
-    save         = "rbxassetid://10734941499",
-    settings     = "rbxassetid://10734950309",
-    shield       = "rbxassetid://10734951847",
-    sword        = "rbxassetid://10734975486",
-    swords       = "rbxassetid://10734975692",
-    target       = "rbxassetid://10734977012",
-    user         = "rbxassetid://10747373176",
-    x            = "rbxassetid://10747384394",
-    zap          = "rbxassetid://10709752035", -- reuse activity as fallback
+    cog              = "rbxassetid://10709810948",
+    crosshair        = "rbxassetid://10709818534",
+    eye              = "rbxassetid://10723346959",
+    info             = "rbxassetid://10723415903",
+    loader           = "rbxassetid://10723434070",
+    minus            = "rbxassetid://10734896206",
+    package          = "rbxassetid://10734909540",
+    refresh          = "rbxassetid://10734933222",
+    ["refresh-cw"]   = "rbxassetid://10734933222",
+    save             = "rbxassetid://10734941499",
+    settings         = "rbxassetid://10734950309",
+    shield           = "rbxassetid://10734951847",
+    sword            = "rbxassetid://10734975486",
+    swords           = "rbxassetid://10734975692",
+    target           = "rbxassetid://10734977012",
+    user             = "rbxassetid://10747373176",
+    x                = "rbxassetid://10747384394",
+    zap              = "rbxassetid://10709752035",
 }
 
 local LOGO_ASSET = "rbxassetid://124205601170943"
@@ -152,7 +159,7 @@ end
 local function tween(obj, time, props, style, dir)
     local info = TweenInfo.new(
         time or 0.2,
-        style or Enum.EasingStyle.Quad,
+        style or Enum.EasingStyle.Quint,
         dir   or Enum.EasingDirection.Out
     )
     local tw = TweenService:Create(obj, info, props)
@@ -160,26 +167,67 @@ local function tween(obj, time, props, style, dir)
     return tw
 end
 
--- Adds a subtle glassmorphism tint gradient to a frame.
-local function glassify(frame, strength)
-    strength = strength or 0.12
-    local grad = Instance.new("UIGradient")
-    grad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 200, 210)),
+----------------------------------------------------------------
+-- Dotted rotating spinner (Kaizen-branded loader)
+----------------------------------------------------------------
+local function makeSpinner(parent, size, color)
+    size = size or 28
+    color = color or Theme.Text
+
+    local Holder = new("Frame", {
+        Size = UDim2.fromOffset(size, size),
+        BackgroundTransparency = 1,
+        Parent = parent,
     })
-    grad.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 1 - strength),
-        NumberSequenceKeypoint.new(1, 1),
+
+    local dots = 8
+    local dotSize = math.max(3, math.floor(size / 8))
+    local radius  = (size / 2) - (dotSize / 2) - 1
+
+    for i = 1, dots do
+        local angle = math.rad((i - 1) * (360 / dots))
+        local x = math.cos(angle) * radius
+        local y = math.sin(angle) * radius
+        local dot = new("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0.5, x, 0.5, y),
+            Size = UDim2.fromOffset(dotSize, dotSize),
+            BackgroundColor3 = color,
+            BackgroundTransparency = (i - 1) / dots,
+            BorderSizePixel = 0,
+            Parent = Holder,
+        })
+        corner(dot, dotSize)
+    end
+
+    -- Rotate by rotating the holder itself
+    local rotator = new("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Parent = Holder,
     })
-    grad.Rotation = 90
-    grad.Parent = frame
-    return grad
+    -- reparent dots under rotator for clean rotation
+    for _, d in ipairs(Holder:GetChildren()) do
+        if d ~= rotator and d:IsA("Frame") then
+            d.Parent = rotator
+        end
+    end
+
+    local running = true
+    task.spawn(function()
+        while running and rotator.Parent do
+            rotator.Rotation = (rotator.Rotation + 6) % 360
+            RunService.Heartbeat:Wait()
+        end
+    end)
+
+    return Holder, function() running = false end
 end
 
 ----------------------------------------------------------------
--- Drag (mouse + touch). Returns state so callers can tell a tap
--- from a drag (needed for the minimized-logo click behavior).
+-- Drag (mouse + touch)
 ----------------------------------------------------------------
 local function makeDraggable(handle, target)
     local state = { isDragging = false, moved = false }
@@ -253,18 +301,45 @@ local function parentGui(guiName)
 end
 
 ----------------------------------------------------------------
--- KaizenUI root table + Options registry (Fluent-compatible)
+-- KaizenUI root + Options registry (Fluent-compatible)
 ----------------------------------------------------------------
 local KaizenUI = {}
 KaizenUI.Options = {}
 
 ----------------------------------------------------------------
--- Loader (branded splash screen)
+-- Branded logo badge (rounded dark square with "K" logo image)
+----------------------------------------------------------------
+local function makeLogoBadge(parent, size, logoId)
+    size = size or 36
+    local Badge = new("Frame", {
+        Size = UDim2.fromOffset(size, size),
+        BackgroundColor3 = Theme.LogoBG,
+        BorderSizePixel = 0,
+        Parent = parent,
+    })
+    corner(Badge, math.floor(size * 0.28))
+    stroke(Badge, Theme.Border, 1, 0.2)
+
+    local Img = new("ImageLabel", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(math.floor(size * 0.62), math.floor(size * 0.62)),
+        BackgroundTransparency = 1,
+        Image = logoId or LOGO_ASSET,
+        ImageColor3 = Theme.Text,
+        ScaleType = Enum.ScaleType.Fit,
+        Parent = Badge,
+    })
+    return Badge, Img
+end
+
+----------------------------------------------------------------
+-- Loader (branded splash screen with dotted ring + K badge)
 ----------------------------------------------------------------
 function KaizenUI:Loader(opts)
     opts = opts or {}
     local title    = opts.Title    or "Kaizen Hub"
-    local subtitle = opts.Subtitle or "Loading scripts..."
+    local subtitle = opts.Subtitle or "Injecting..."
     local logoId   = opts.LogoId   or LOGO_ASSET
     local duration = tonumber(opts.Duration) or 1.8
 
@@ -285,75 +360,73 @@ function KaizenUI:Loader(opts)
         Name = "Card",
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(280, 140),
-        BackgroundColor3 = Theme.Glass,
-        BackgroundTransparency = 0.05,
+        Size = UDim2.fromOffset(320, 120),
+        BackgroundColor3 = Theme.Background,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Parent = gui,
     })
-    corner(Card, 16)
-    stroke(Card, Theme.Border, 1, 0.35)
-    glassify(Card, 0.1)
+    corner(Card, 14)
+    stroke(Card, Theme.Border, 1, 0.2)
+    padding(Card, 16, 18, 16, 18)
 
-    -- Logo with a rotating ring behind it
-    local LogoHolder = new("Frame", {
-        Size = UDim2.fromOffset(64, 64),
-        Position = UDim2.fromOffset(24, 38),
+    -- Left: dotted spinner with K badge inside
+    local SpinnerHolder = new("Frame", {
+        Size = UDim2.fromOffset(56, 56),
+        Position = UDim2.fromOffset(0, 16),
+        BackgroundTransparency = 1,
+        Parent = Card,
+    })
+    local spinner, stopSpinner = makeSpinner(SpinnerHolder, 56, Theme.Text)
+    spinner.Position = UDim2.fromScale(0.5, 0.5)
+    spinner.AnchorPoint = Vector2.new(0.5, 0.5)
+
+    local Badge, BadgeImg = makeLogoBadge(SpinnerHolder, 30, logoId)
+    Badge.AnchorPoint = Vector2.new(0.5, 0.5)
+    Badge.Position = UDim2.fromScale(0.5, 0.5)
+    Badge.BackgroundColor3 = Theme.LogoBG
+    BadgeImg.ImageTransparency = 0
+    BadgeImg.ImageColor3 = Theme.Text
+
+    -- Right: title + subtitle + progress
+    local TextCol = new("Frame", {
+        Position = UDim2.fromOffset(72, 10),
+        Size = UDim2.new(1, -72, 1, -20),
         BackgroundTransparency = 1,
         Parent = Card,
     })
 
-    local Ring = new("ImageLabel", {
-        Size = UDim2.fromScale(1, 1),
-        BackgroundTransparency = 1,
-        Image = resolveIcon("loader"),
-        ImageColor3 = Theme.Text,
-        ImageTransparency = 0.2,
-        Parent = LogoHolder,
-    })
-
-    local Logo = new("ImageLabel", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(40, 40),
-        BackgroundTransparency = 1,
-        Image = logoId,
-        ScaleType = Enum.ScaleType.Fit,
-        Parent = LogoHolder,
-    })
-    corner(Logo, 10)
-
-    -- Title + subtitle
     local TitleLbl = new("TextLabel", {
-        Position = UDim2.fromOffset(104, 40),
-        Size = UDim2.fromOffset(150, 24),
+        Size = UDim2.new(1, 0, 0, 20),
         BackgroundTransparency = 1,
         Text = title,
         TextColor3 = Theme.Text,
         Font = FontBold,
-        TextSize = 18,
+        TextSize = 16,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = Card,
+        TextTransparency = 1,
+        Parent = TextCol,
     })
+
     local SubLbl = new("TextLabel", {
-        Position = UDim2.fromOffset(104, 64),
-        Size = UDim2.fromOffset(150, 18),
+        Position = UDim2.fromOffset(0, 22),
+        Size = UDim2.new(1, 0, 0, 16),
         BackgroundTransparency = 1,
         Text = subtitle,
         TextColor3 = Theme.SubText,
         Font = FontSans,
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = Card,
+        TextTransparency = 1,
+        Parent = TextCol,
     })
 
-    -- Progress bar
     local BarBg = new("Frame", {
-        Position = UDim2.fromOffset(104, 92),
-        Size = UDim2.fromOffset(150, 4),
-        BackgroundColor3 = Theme.BorderSubtle,
+        Position = UDim2.new(0, 0, 1, -6),
+        Size = UDim2.new(1, 0, 0, 3),
+        BackgroundColor3 = Theme.Divider,
         BorderSizePixel = 0,
-        Parent = Card,
+        Parent = TextCol,
     })
     corner(BarBg, 2)
     local Bar = new("Frame", {
@@ -364,35 +437,26 @@ function KaizenUI:Loader(opts)
     })
     corner(Bar, 2)
 
-    -- Fade in
-    Card.BackgroundTransparency = 1
-    Dim.BackgroundTransparency = 1
+    -- Animate in
     tween(Dim,  0.25, { BackgroundTransparency = 0.5 })
-    tween(Card, 0.25, { BackgroundTransparency = 0.05 })
-
-    -- Rotate the ring
-    local running = true
-    task.spawn(function()
-        while running and Ring.Parent do
-            Ring.Rotation = (Ring.Rotation + 4) % 360
-            RunService.Heartbeat:Wait()
-        end
-    end)
-
-    -- Drive the progress bar
+    tween(Card, 0.3,  { BackgroundTransparency = 0 })
+    tween(TitleLbl, 0.3, { TextTransparency = 0 })
+    tween(SubLbl,   0.3, { TextTransparency = 0 })
     tween(Bar, duration, { Size = UDim2.fromScale(1, 1) }, Enum.EasingStyle.Linear)
 
     task.wait(duration)
-    running = false
+    stopSpinner()
 
     tween(Dim,  0.25, { BackgroundTransparency = 1 })
     tween(Card, 0.25, { BackgroundTransparency = 1 })
-    task.wait(0.25)
+    tween(TitleLbl, 0.2, { TextTransparency = 1 })
+    tween(SubLbl,   0.2, { TextTransparency = 1 })
+    task.wait(0.28)
     gui:Destroy()
 end
 
 ----------------------------------------------------------------
--- Notify (toast stack in the top-right)
+-- Notify (flat toast stack in top-right)
 ----------------------------------------------------------------
 local NotifyGui
 local NotifyList
@@ -426,15 +490,14 @@ function KaizenUI:Notify(opts)
 
     local Card = new("Frame", {
         Size = UDim2.new(1, 0, 0, 0),
-        BackgroundColor3 = Theme.Glass,
-        BackgroundTransparency = 0.05,
+        BackgroundColor3 = Theme.Elevated,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         AutomaticSize = Enum.AutomaticSize.Y,
         Parent = NotifyList,
     })
     corner(Card, 12)
-    stroke(Card, Theme.Border, 1, 0.3)
-    glassify(Card, 0.1)
+    stroke(Card, Theme.Border, 1, 0.15)
     padding(Card, 12, 14, 12, 14)
 
     local TitleLbl = new("TextLabel", {
@@ -445,6 +508,7 @@ function KaizenUI:Notify(opts)
         Font = FontBold,
         TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left,
+        TextTransparency = 1,
         Parent = Card,
     })
     local ContentLbl = new("TextLabel", {
@@ -459,21 +523,18 @@ function KaizenUI:Notify(opts)
         TextWrapped = true,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Top,
+        TextTransparency = 1,
         Parent = Card,
     })
 
-    -- Fade in
-    Card.BackgroundTransparency = 1
-    TitleLbl.TextTransparency = 1
-    ContentLbl.TextTransparency = 1
-    tween(Card, 0.2, { BackgroundTransparency = 0.05 })
-    tween(TitleLbl,  0.2, { TextTransparency = 0 })
-    tween(ContentLbl, 0.2, { TextTransparency = 0.2 })
+    tween(Card,       0.22, { BackgroundTransparency = 0 })
+    tween(TitleLbl,   0.22, { TextTransparency = 0 })
+    tween(ContentLbl, 0.22, { TextTransparency = 0.15 })
 
     task.delay(duration, function()
         if not Card.Parent then return end
-        tween(Card, 0.3, { BackgroundTransparency = 1 })
-        tween(TitleLbl,  0.3, { TextTransparency = 1 })
+        tween(Card,       0.3, { BackgroundTransparency = 1 })
+        tween(TitleLbl,   0.3, { TextTransparency = 1 })
         tween(ContentLbl, 0.3, { TextTransparency = 1 })
         task.wait(0.3)
         Card:Destroy()
@@ -485,140 +546,144 @@ end
 ----------------------------------------------------------------
 function KaizenUI:CreateWindow(opts)
     opts = opts or {}
-    local title    = opts.Title    or "KaizenUI"
+    local title    = opts.Title    or "KaizenHub"
     local subtitle = opts.SubTitle or opts.Subtitle or ""
     local logoId   = opts.LogoId   or LOGO_ASSET
-    local tabW     = tonumber(opts.TabWidth) or 160
+    local tabW     = tonumber(opts.TabWidth) or 180
     local sizeOpt  = opts.Size
 
     local gui = parentGui("KaizenUI")
 
     ----------------------------------------------------------------
-    -- Root window
+    -- Root window (solid, flat)
     ----------------------------------------------------------------
     local Root = new("Frame", {
         Name = "Root",
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(820, 520),
+        Size = UDim2.fromOffset(880, 560),
         BackgroundColor3 = Theme.Background,
-        BackgroundTransparency = 0.05,
         BorderSizePixel = 0,
         Parent = gui,
         ClipsDescendants = true,
     })
-    corner(Root, 14)
-    stroke(Root, Theme.Border, 1, 0.4)
-    glassify(Root, 0.08)
+    corner(Root, 16)
+    stroke(Root, Theme.Border, 1, 0.25)
 
+    ----------------------------------------------------------------
     -- TopBar
+    ----------------------------------------------------------------
     local TopBar = new("Frame", {
         Name = "TopBar",
-        Size = UDim2.new(1, 0, 0, 48),
-        BackgroundColor3 = Theme.GlassStrong,
-        BackgroundTransparency = 0.15,
+        Size = UDim2.new(1, 0, 0, 56),
+        BackgroundColor3 = Theme.Background,
         BorderSizePixel = 0,
         Parent = Root,
     })
-    local TopBarPad = padding(TopBar, 0, 14, 0, 14)
+    local TopBarPad = padding(TopBar, 0, 16, 0, 16)
 
     local BottomBorder = new("Frame", {
         Size = UDim2.new(1, 0, 0, 1),
         Position = UDim2.fromScale(0, 1),
-        BackgroundColor3 = Theme.BorderSubtle,
+        BackgroundColor3 = Theme.Divider,
         BorderSizePixel = 0,
         Parent = TopBar,
     })
 
-    local Logo = new("ImageLabel", {
-        Name = "Logo",
+    -- Branded logo badge
+    local LogoWrap = new("Frame", {
         AnchorPoint = Vector2.new(0, 0.5),
         Position = UDim2.new(0, 0, 0.5, 0),
-        Size = UDim2.fromOffset(28, 28),
+        Size = UDim2.fromOffset(34, 34),
         BackgroundTransparency = 1,
-        Image = logoId,
-        ScaleType = Enum.ScaleType.Fit,
         Parent = TopBar,
     })
-    corner(Logo, 8)
+    local LogoBadge, LogoImg = makeLogoBadge(LogoWrap, 34, logoId)
+    LogoBadge.Size = UDim2.fromScale(1, 1)
 
     local TitleLbl = new("TextLabel", {
         Name = "Title",
         AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 38, 0.5, 0),
-        Size = UDim2.fromOffset(140, 24),
+        Position = UDim2.new(0, 46, 0.5, 0),
+        Size = UDim2.fromOffset(120, 22),
         BackgroundTransparency = 1,
         Text = title,
         TextColor3 = Theme.Text,
         Font = FontBold,
-        TextSize = 15,
+        TextSize = 16,
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = TopBar,
     })
+
     local SubLbl = new("TextLabel", {
         Name = "Subtitle",
         AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 180, 0.5, 0),
+        Position = UDim2.new(0, 172, 0.5, 0),
         Size = UDim2.new(1, -260, 0, 18),
         BackgroundTransparency = 1,
         Text = subtitle,
         TextColor3 = Theme.SubText,
         Font = FontSans,
-        TextSize = 12,
+        TextSize = 13,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd,
         Parent = TopBar,
     })
 
-    -- Minimize + Close
+    -- Window control buttons (minimize + close) — minimal, flat
     local function makeIconBtn(key, xOffset)
         local btn = new("ImageButton", {
             AnchorPoint = Vector2.new(1, 0.5),
             Position = UDim2.new(1, xOffset, 0.5, 0),
-            Size = UDim2.fromOffset(24, 24),
-            BackgroundColor3 = Theme.Card,
-            BackgroundTransparency = 0.5,
+            Size = UDim2.fromOffset(26, 26),
+            BackgroundColor3 = Theme.Elevated,
+            BackgroundTransparency = 1,
             BorderSizePixel = 0,
             Image = resolveIcon(key),
-            ImageColor3 = Theme.Text,
+            ImageColor3 = Theme.SubText,
             Parent = TopBar,
         })
         corner(btn, 6)
-        btn.MouseEnter:Connect(function() tween(btn, 0.12, { BackgroundTransparency = 0.1 }) end)
-        btn.MouseLeave:Connect(function() tween(btn, 0.12, { BackgroundTransparency = 0.5 }) end)
+        btn.MouseEnter:Connect(function()
+            tween(btn, 0.15, { BackgroundTransparency = 0, ImageColor3 = Theme.Text })
+        end)
+        btn.MouseLeave:Connect(function()
+            tween(btn, 0.15, { BackgroundTransparency = 1, ImageColor3 = Theme.SubText })
+        end)
         return btn
     end
     local CloseBtn = makeIconBtn("x", 0)
     local MinBtn   = makeIconBtn("minus", -32)
 
-    -- Sidebar
+    ----------------------------------------------------------------
+    -- Sidebar (flat, same bg as window)
+    ----------------------------------------------------------------
     local Sidebar = new("Frame", {
         Name = "Sidebar",
-        Position = UDim2.new(0, 0, 0, 48),
-        Size = UDim2.new(0, tabW, 1, -48),
-        BackgroundColor3 = Theme.GlassStrong,
-        BackgroundTransparency = 0.2,
+        Position = UDim2.new(0, 0, 0, 56),
+        Size = UDim2.new(0, tabW, 1, -56),
+        BackgroundColor3 = Theme.Background,
         BorderSizePixel = 0,
         Parent = Root,
     })
-    local SidebarPad = padding(Sidebar, 10, 10, 10, 10)
+    local SidebarPad = padding(Sidebar, 12, 12, 12, 12)
+
     local SidebarDiv = new("Frame", {
         AnchorPoint = Vector2.new(1, 0),
         Position = UDim2.new(1, 0, 0, 0),
         Size = UDim2.new(0, 1, 1, 0),
-        BackgroundColor3 = Theme.BorderSubtle,
+        BackgroundColor3 = Theme.Divider,
         BorderSizePixel = 0,
         Parent = Sidebar,
     })
 
+    -- Tab scroll list
     local TabList = new("ScrollingFrame", {
         Name = "TabList",
-        Size = UDim2.new(1, 0, 1, 0),
+        Size = UDim2.new(1, 0, 1, -68), -- leave room for status pill at bottom
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ScrollBarThickness = 2,
-        ScrollBarImageColor3 = Theme.Border,
-        ScrollBarImageTransparency = 0.4,
+        ScrollBarThickness = 0,
         CanvasSize = UDim2.new(0, 0, 0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -629,17 +694,69 @@ function KaizenUI:CreateWindow(opts)
     tabsLayout.SortOrder = Enum.SortOrder.LayoutOrder
     tabsLayout.Parent = TabList
 
-    -- Content
+    -- Status pill at bottom of sidebar ("Injecting... Please wait")
+    local StatusPill = new("Frame", {
+        Name = "StatusPill",
+        AnchorPoint = Vector2.new(0, 1),
+        Position = UDim2.new(0, 0, 1, 0),
+        Size = UDim2.new(1, 0, 0, 56),
+        BackgroundColor3 = Theme.Elevated,
+        BorderSizePixel = 0,
+        Visible = false,
+        Parent = Sidebar,
+    })
+    corner(StatusPill, 10)
+    stroke(StatusPill, Theme.Border, 1, 0.3)
+    padding(StatusPill, 0, 12, 0, 12)
+
+    local SpinnerWrap = new("Frame", {
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, 0, 0.5, 0),
+        Size = UDim2.fromOffset(28, 28),
+        BackgroundTransparency = 1,
+        Parent = StatusPill,
+    })
+    local statusSpinner, stopStatusSpinner = makeSpinner(SpinnerWrap, 28, Theme.Text)
+    statusSpinner.AnchorPoint = Vector2.new(0.5, 0.5)
+    statusSpinner.Position = UDim2.fromScale(0.5, 0.5)
+
+    local StatusTitle = new("TextLabel", {
+        Position = UDim2.fromOffset(36, 8),
+        Size = UDim2.new(1, -40, 0, 18),
+        BackgroundTransparency = 1,
+        Text = "Injecting...",
+        TextColor3 = Theme.Text,
+        Font = FontBold,
+        TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        Parent = StatusPill,
+    })
+    local StatusSub = new("TextLabel", {
+        Position = UDim2.fromOffset(36, 26),
+        Size = UDim2.new(1, -40, 0, 16),
+        BackgroundTransparency = 1,
+        Text = "Please wait",
+        TextColor3 = Theme.SubText,
+        Font = FontSans,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        Parent = StatusPill,
+    })
+
+    ----------------------------------------------------------------
+    -- Content area
+    ----------------------------------------------------------------
     local Content = new("Frame", {
         Name = "Content",
-        Position = UDim2.new(0, tabW, 0, 48),
-        Size = UDim2.new(1, -tabW, 1, -48),
+        Position = UDim2.new(0, tabW, 0, 56),
+        Size = UDim2.new(1, -tabW, 1, -56),
         BackgroundColor3 = Theme.Background,
-        BackgroundTransparency = 0.25,
         BorderSizePixel = 0,
         Parent = Root,
     })
-    local ContentPad = padding(Content, 18, 18, 18, 18)
+    local ContentPad = padding(Content, 22, 28, 22, 28)
 
     local Pages = new("Frame", {
         Name = "Pages",
@@ -659,8 +776,7 @@ function KaizenUI:CreateWindow(opts)
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
         Size = UDim2.fromOffset(56, 56),
-        BackgroundColor3 = Theme.Glass,
-        BackgroundTransparency = 0.1,
+        BackgroundColor3 = Theme.LogoBG,
         BorderSizePixel = 0,
         Image = logoId,
         ScaleType = Enum.ScaleType.Fit,
@@ -668,9 +784,8 @@ function KaizenUI:CreateWindow(opts)
         Parent = gui,
     })
     corner(Pill, 14)
-    stroke(Pill, Theme.Border, 1, 0.3)
-    glassify(Pill, 0.08)
-    padding(Pill, 8, 8, 8, 8)
+    stroke(Pill, Theme.Border, 1, 0.2)
+    padding(Pill, 10, 10, 10, 10)
     local pillDrag = makeDraggable(Pill, Pill)
 
     local minimized = false
@@ -681,7 +796,7 @@ function KaizenUI:CreateWindow(opts)
         Root.Visible = true
         Root.Position = Pill.Position
         Root.Size = UDim2.fromOffset(0, 0)
-        tween(Root, 0.22, { Size = lastSize })
+        tween(Root, 0.25, { Size = lastSize })
         Pill.Visible = false
     end
 
@@ -695,7 +810,7 @@ function KaizenUI:CreateWindow(opts)
             Pill.Visible = true
             Pill.Size = UDim2.fromOffset(0, 0)
             Root.Visible = false
-            tween(Pill, 0.2, { Size = UDim2.fromOffset(56, 56) })
+            tween(Pill, 0.22, { Size = UDim2.fromOffset(56, 56) })
         end
     end)
 
@@ -708,13 +823,14 @@ function KaizenUI:CreateWindow(opts)
     end)
 
     CloseBtn.MouseButton1Click:Connect(function()
-        tween(Root, 0.18, { Size = UDim2.fromOffset(0, 0), BackgroundTransparency = 1 })
-        task.wait(0.2)
+        tween(Root, 0.2, { Size = UDim2.fromOffset(0, 0), BackgroundTransparency = 1 })
+        task.wait(0.22)
+        if stopStatusSpinner then stopStatusSpinner() end
         gui:Destroy()
     end)
 
     ----------------------------------------------------------------
-    -- Responsive sizing
+    -- Responsive sizing (PC / laptop / mobile)
     ----------------------------------------------------------------
     local function isTouchOnly()
         return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
@@ -723,67 +839,86 @@ function KaizenUI:CreateWindow(opts)
     local function updateResponsive()
         local cam = Workspace.CurrentCamera
         local vp = (cam and cam.ViewportSize) or Vector2.new(1280, 720)
-        local narrow = isTouchOnly() or vp.X < 900 or vp.Y < 560
+        local touch  = isTouchOnly()
+        local small  = vp.X < 820 or vp.Y < 540
+        local narrow = touch or small
 
-        SubLbl.Visible = not narrow and subtitle ~= ""
+        SubLbl.Visible = (vp.X >= 720) and subtitle ~= ""
 
         if narrow then
-            local w = math.clamp(math.floor(vp.X * 0.92), 320, 600)
-            local h = math.clamp(math.floor(vp.Y * 0.86), 340, 500)
+            local w = math.clamp(math.floor(vp.X * 0.94), 340, 620)
+            local h = math.clamp(math.floor(vp.Y * 0.86), 360, 520)
             if sizeOpt and typeof(sizeOpt) == "UDim2" then
-                w = math.min(w, sizeOpt.X.Offset > 0 and sizeOpt.X.Offset or w)
-                h = math.min(h, sizeOpt.Y.Offset > 0 and sizeOpt.Y.Offset or h)
+                if sizeOpt.X.Offset > 0 then w = math.min(w, sizeOpt.X.Offset) end
+                if sizeOpt.Y.Offset > 0 then h = math.min(h, sizeOpt.Y.Offset) end
             end
             Root.Size = UDim2.fromOffset(w, h)
 
-            local sw = math.clamp(math.floor(w * 0.32), 110, 160)
-            Sidebar.Size     = UDim2.new(0, sw, 1, -48)
-            Content.Size     = UDim2.new(1, -sw, 1, -48)
-            Content.Position = UDim2.new(0, sw, 0, 48)
+            local sw = math.clamp(math.floor(w * 0.34), 120, 170)
+            Sidebar.Size     = UDim2.new(0, sw, 1, -52)
+            Content.Size     = UDim2.new(1, -sw, 1, -52)
+            Content.Position = UDim2.new(0, sw, 0, 52)
 
-            ContentPad.PaddingTop    = UDim.new(0, 12)
-            ContentPad.PaddingBottom = UDim.new(0, 12)
-            ContentPad.PaddingLeft   = UDim.new(0, 14)
-            ContentPad.PaddingRight  = UDim.new(0, 14)
+            TopBar.Size = UDim2.new(1, 0, 0, 52)
+            Sidebar.Position = UDim2.new(0, 0, 0, 52)
 
-            TopBarPad.PaddingLeft  = UDim.new(0, 10)
-            TopBarPad.PaddingRight = UDim.new(0, 10)
-
-            TitleLbl.TextSize = 14
-            TitleLbl.Size = UDim2.fromOffset(100, 22)
-
-            SidebarPad.PaddingLeft   = UDim.new(0, 8)
-            SidebarPad.PaddingRight  = UDim.new(0, 8)
-            SidebarPad.PaddingTop    = UDim.new(0, 8)
-            SidebarPad.PaddingBottom = UDim.new(0, 8)
-        else
-            local w = 820
-            local h = 520
-            if sizeOpt and typeof(sizeOpt) == "UDim2" then
-                if sizeOpt.X.Offset > 0 then w = sizeOpt.X.Offset end
-                if sizeOpt.Y.Offset > 0 then h = sizeOpt.Y.Offset end
-            end
-            Root.Size = UDim2.fromOffset(w, h)
-
-            Sidebar.Size     = UDim2.new(0, tabW, 1, -48)
-            Content.Size     = UDim2.new(1, -tabW, 1, -48)
-            Content.Position = UDim2.new(0, tabW, 0, 48)
-
-            ContentPad.PaddingTop    = UDim.new(0, 18)
-            ContentPad.PaddingBottom = UDim.new(0, 18)
+            ContentPad.PaddingTop    = UDim.new(0, 16)
+            ContentPad.PaddingBottom = UDim.new(0, 16)
             ContentPad.PaddingLeft   = UDim.new(0, 18)
             ContentPad.PaddingRight  = UDim.new(0, 18)
 
-            TopBarPad.PaddingLeft  = UDim.new(0, 14)
-            TopBarPad.PaddingRight = UDim.new(0, 14)
+            TopBarPad.PaddingLeft  = UDim.new(0, 12)
+            TopBarPad.PaddingRight = UDim.new(0, 12)
 
-            TitleLbl.TextSize = 15
-            TitleLbl.Size = UDim2.fromOffset(140, 24)
+            TitleLbl.TextSize = 14
+            TitleLbl.Size = UDim2.fromOffset(96, 20)
+            SubLbl.Position = UDim2.new(0, 148, 0.5, 0)
+            SubLbl.TextSize = 11
 
             SidebarPad.PaddingLeft   = UDim.new(0, 10)
             SidebarPad.PaddingRight  = UDim.new(0, 10)
             SidebarPad.PaddingTop    = UDim.new(0, 10)
             SidebarPad.PaddingBottom = UDim.new(0, 10)
+
+            StatusPill.Size = UDim2.new(1, 0, 0, 52)
+        else
+            local w = 880
+            local h = 560
+            if sizeOpt and typeof(sizeOpt) == "UDim2" then
+                if sizeOpt.X.Offset > 0 then w = sizeOpt.X.Offset end
+                if sizeOpt.Y.Offset > 0 then h = sizeOpt.Y.Offset end
+            end
+            -- Clamp to viewport with comfortable margin
+            w = math.min(w, math.floor(vp.X * 0.92))
+            h = math.min(h, math.floor(vp.Y * 0.92))
+            Root.Size = UDim2.fromOffset(w, h)
+
+            Sidebar.Size     = UDim2.new(0, tabW, 1, -56)
+            Content.Size     = UDim2.new(1, -tabW, 1, -56)
+            Content.Position = UDim2.new(0, tabW, 0, 56)
+            Sidebar.Position = UDim2.new(0, 0, 0, 56)
+
+            TopBar.Size = UDim2.new(1, 0, 0, 56)
+
+            ContentPad.PaddingTop    = UDim.new(0, 22)
+            ContentPad.PaddingBottom = UDim.new(0, 22)
+            ContentPad.PaddingLeft   = UDim.new(0, 28)
+            ContentPad.PaddingRight  = UDim.new(0, 28)
+
+            TopBarPad.PaddingLeft  = UDim.new(0, 16)
+            TopBarPad.PaddingRight = UDim.new(0, 16)
+
+            TitleLbl.TextSize = 16
+            TitleLbl.Size = UDim2.fromOffset(120, 22)
+            SubLbl.Position = UDim2.new(0, 172, 0.5, 0)
+            SubLbl.TextSize = 13
+
+            SidebarPad.PaddingLeft   = UDim.new(0, 12)
+            SidebarPad.PaddingRight  = UDim.new(0, 12)
+            SidebarPad.PaddingTop    = UDim.new(0, 12)
+            SidebarPad.PaddingBottom = UDim.new(0, 12)
+
+            StatusPill.Size = UDim2.new(1, 0, 0, 56)
         end
     end
 
@@ -803,25 +938,85 @@ function KaizenUI:CreateWindow(opts)
     Window.ScreenGui = gui
     Window.Root = Root
 
+    -- Status pill public API
+    function Window:SetStatus(opts)
+        opts = opts or {}
+        if opts.Visible == false then
+            tween(StatusPill, 0.2, { BackgroundTransparency = 1 })
+            task.delay(0.22, function()
+                if StatusPill.Parent then StatusPill.Visible = false end
+            end)
+            return
+        end
+        StatusTitle.Text = tostring(opts.Title    or "Injecting...")
+        StatusSub.Text   = tostring(opts.Subtitle or "Please wait")
+        StatusPill.Visible = true
+        StatusPill.BackgroundTransparency = 1
+        tween(StatusPill, 0.2, { BackgroundTransparency = 0 })
+    end
+    function Window:HideStatus()
+        self:SetStatus({ Visible = false })
+    end
+
+    ----------------------------------------------------------------
+    -- Page title block ("Visuals / Adjust visual enhancements...")
+    ----------------------------------------------------------------
+    local function buildPageHeader(page, name, desc)
+        local Header = new("Frame", {
+            Size = UDim2.new(1, 0, 0, 62),
+            BackgroundTransparency = 1,
+            LayoutOrder = -1000,
+            Parent = page,
+        })
+        new("TextLabel", {
+            Size = UDim2.new(1, 0, 0, 28),
+            BackgroundTransparency = 1,
+            Text = name,
+            TextColor3 = Theme.Text,
+            Font = FontBold,
+            TextSize = 24,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = Header,
+        })
+        new("TextLabel", {
+            Position = UDim2.fromOffset(0, 32),
+            Size = UDim2.new(1, 0, 0, 16),
+            BackgroundTransparency = 1,
+            Text = desc or "",
+            TextColor3 = Theme.SubText,
+            Font = FontSans,
+            TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = Header,
+        })
+        new("Frame", {
+            Position = UDim2.new(0, 0, 1, -1),
+            Size = UDim2.new(1, 0, 0, 1),
+            BackgroundColor3 = Theme.Divider,
+            BorderSizePixel = 0,
+            Parent = Header,
+        })
+    end
+
     local function selectTab(tab)
         if Window._activeTab == tab then return end
         for _, t in ipairs(Window._ordered) do
-            t._button.BackgroundTransparency = 1
-            t._label.TextColor3 = Theme.SubText
-            t._icon.ImageColor3 = Theme.SubText
+            tween(t._button, 0.15, { BackgroundTransparency = 1 })
+            tween(t._label,  0.15, { TextColor3 = Theme.SubText })
+            tween(t._icon,   0.15, { ImageColor3 = Theme.SubText })
             t._page.Visible = false
         end
         Window._activeTab = tab
-        tab._button.BackgroundTransparency = 0
-        tween(tab._button, 0.15, { BackgroundColor3 = Theme.SidebarActive })
-        tab._label.TextColor3 = Theme.Text
-        tab._icon.ImageColor3 = Theme.Text
+        tween(tab._button, 0.18, { BackgroundColor3 = Theme.Active, BackgroundTransparency = 0 })
+        tween(tab._label,  0.18, { TextColor3 = Theme.Text })
+        tween(tab._icon,   0.18, { ImageColor3 = Theme.Text })
         tab._page.Visible = true
     end
 
     function Window:AddTab(config)
         config = config or {}
         local name = config.Title or config.Name or "Tab"
+        local desc = config.Description
         local iconKey = config.Icon
 
         local Tab = {}
@@ -829,20 +1024,20 @@ function KaizenUI:CreateWindow(opts)
 
         -- Sidebar button
         local Btn = new("TextButton", {
-            Size = UDim2.new(1, 0, 0, 36),
-            BackgroundColor3 = Theme.SidebarActive,
+            Size = UDim2.new(1, 0, 0, 40),
+            BackgroundColor3 = Theme.Active,
             BackgroundTransparency = 1,
             AutoButtonColor = false,
             Text = "",
             BorderSizePixel = 0,
             Parent = TabList,
         })
-        corner(Btn, 8)
+        corner(Btn, 10)
 
         local IconImg = new("ImageLabel", {
             AnchorPoint = Vector2.new(0, 0.5),
-            Position = UDim2.new(0, 10, 0.5, 0),
-            Size = UDim2.fromOffset(16, 16),
+            Position = UDim2.new(0, 12, 0.5, 0),
+            Size = UDim2.fromOffset(18, 18),
             BackgroundTransparency = 1,
             Image = resolveIcon(iconKey),
             ImageColor3 = Theme.SubText,
@@ -851,13 +1046,13 @@ function KaizenUI:CreateWindow(opts)
 
         local Lbl = new("TextLabel", {
             AnchorPoint = Vector2.new(0, 0.5),
-            Position = UDim2.new(0, 34, 0.5, 0),
-            Size = UDim2.new(1, -40, 1, 0),
+            Position = UDim2.new(0, 40, 0.5, 0),
+            Size = UDim2.new(1, -46, 1, 0),
             BackgroundTransparency = 1,
             Text = name,
             TextColor3 = Theme.SubText,
-            Font = FontBold,
-            TextSize = 13,
+            Font = FontSemi,
+            TextSize = 14,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextTruncate = Enum.TextTruncate.AtEnd,
             Parent = Btn,
@@ -865,12 +1060,16 @@ function KaizenUI:CreateWindow(opts)
 
         Btn.MouseEnter:Connect(function()
             if Window._activeTab ~= Tab then
-                tween(Btn, 0.12, { BackgroundTransparency = 0.6 })
+                tween(Btn, 0.15, { BackgroundColor3 = Theme.Hover, BackgroundTransparency = 0 })
+                tween(Lbl, 0.15, { TextColor3 = Theme.Text })
+                tween(IconImg, 0.15, { ImageColor3 = Theme.Text })
             end
         end)
         Btn.MouseLeave:Connect(function()
             if Window._activeTab ~= Tab then
-                tween(Btn, 0.12, { BackgroundTransparency = 1 })
+                tween(Btn, 0.15, { BackgroundTransparency = 1 })
+                tween(Lbl, 0.15, { TextColor3 = Theme.SubText })
+                tween(IconImg, 0.15, { ImageColor3 = Theme.SubText })
             end
         end)
 
@@ -888,24 +1087,23 @@ function KaizenUI:CreateWindow(opts)
             Visible = false,
             Parent = Pages,
         })
-        -- Balanced padding on both sides so cards never stitch to the
-        -- window edge (this fixes the "Combat" card-clipping bug).
-        padding(Page, 2, 10, 14, 2)
+        padding(Page, 0, 8, 18, 0)
         local pageLayout = Instance.new("UIListLayout")
         pageLayout.Padding = UDim.new(0, 10)
         pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
         pageLayout.Parent = Page
 
+        buildPageHeader(Page, name, desc or ("Configure " .. name:lower() .. " settings."))
+
         Tab._button = Btn
         Tab._icon   = IconImg
         Tab._label  = Lbl
         Tab._page   = Page
-        Tab._layoutOrder = 0
 
         Btn.MouseButton1Click:Connect(function() selectTab(Tab) end)
 
         ----------------------------------------------------------------
-        -- Section (groups related controls under a label + divider)
+        -- Section
         ----------------------------------------------------------------
         function Tab:AddSection(sectionName)
             local Section = {}
@@ -923,44 +1121,36 @@ function KaizenUI:CreateWindow(opts)
 
             if sectionName and sectionName ~= "" then
                 local Header = new("Frame", {
-                    Size = UDim2.new(1, 0, 0, 22),
+                    Size = UDim2.new(1, 0, 0, 24),
                     BackgroundTransparency = 1,
                     LayoutOrder = 0,
                     Parent = Container,
                 })
-                local HeaderLbl = new("TextLabel", {
-                    Size = UDim2.new(1, 0, 0, 16),
+                new("TextLabel", {
+                    Size = UDim2.new(1, 0, 1, 0),
                     BackgroundTransparency = 1,
                     Text = sectionName,
                     TextColor3 = Theme.Text,
                     Font = FontBold,
-                    TextSize = 13,
+                    TextSize = 14,
                     TextXAlignment = Enum.TextXAlignment.Left,
-                    Parent = Header,
-                })
-                local Divider = new("Frame", {
-                    Position = UDim2.new(0, 0, 1, -1),
-                    Size = UDim2.new(1, 0, 0, 1),
-                    BackgroundColor3 = Theme.BorderSubtle,
-                    BorderSizePixel = 0,
                     Parent = Header,
                 })
             end
 
             ----------------------------------------------------------------
-            -- Card primitive shared by all controls
+            -- Card primitive (solid, subtle border, no glass)
             ----------------------------------------------------------------
             local function makeCard(height)
                 local Card = new("Frame", {
-                    Size = UDim2.new(1, 0, 0, height or 54),
-                    BackgroundColor3 = Theme.Card,
-                    BackgroundTransparency = 0.2,
+                    Size = UDim2.new(1, 0, 0, height or 60),
+                    BackgroundColor3 = Theme.Elevated,
                     BorderSizePixel = 0,
                     Parent = Container,
                 })
                 corner(Card, 10)
-                stroke(Card, Theme.BorderSubtle, 1, 0.2)
-                padding(Card, 10, 14, 10, 14)
+                stroke(Card, Theme.Border, 1, 0.35)
+                padding(Card, 12, 18, 12, 18)
                 return Card
             end
 
@@ -969,28 +1159,31 @@ function KaizenUI:CreateWindow(opts)
             ----------------------------------------------------------------
             function Section:AddToggle(id, o)
                 o = o or {}
-                local Card = makeCard(54)
+                local Card = makeCard(60)
+
+                local hasDesc = o.Description and o.Description ~= ""
+                local titleY = hasDesc and 0 or 6
 
                 local Title = new("TextLabel", {
-                    Size = UDim2.new(1, -60, 0, 16),
-                    Position = UDim2.fromOffset(0, 2),
+                    Size = UDim2.new(1, -70, 0, 18),
+                    Position = UDim2.fromOffset(0, titleY),
                     BackgroundTransparency = 1,
                     Text = o.Title or id or "Toggle",
                     TextColor3 = Theme.Text,
                     Font = FontBold,
-                    TextSize = 13,
+                    TextSize = 14,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     Parent = Card,
                 })
-                if o.Description then
+                if hasDesc then
                     new("TextLabel", {
-                        Size = UDim2.new(1, -60, 0, 14),
+                        Size = UDim2.new(1, -70, 0, 16),
                         Position = UDim2.fromOffset(0, 20),
                         BackgroundTransparency = 1,
                         Text = o.Description,
                         TextColor3 = Theme.SubText,
                         Font = FontSans,
-                        TextSize = 11,
+                        TextSize = 12,
                         TextXAlignment = Enum.TextXAlignment.Left,
                         Parent = Card,
                     })
@@ -999,15 +1192,15 @@ function KaizenUI:CreateWindow(opts)
                 local Track = new("Frame", {
                     AnchorPoint = Vector2.new(1, 0.5),
                     Position = UDim2.new(1, 0, 0.5, 0),
-                    Size = UDim2.fromOffset(40, 22),
+                    Size = UDim2.fromOffset(42, 24),
                     BackgroundColor3 = Theme.ToggleOff,
                     BorderSizePixel = 0,
                     Parent = Card,
                 })
-                corner(Track, 11)
+                corner(Track, 12)
 
                 local Knob = new("Frame", {
-                    Position = UDim2.fromOffset(2, 2),
+                    Position = UDim2.fromOffset(3, 3),
                     Size = UDim2.fromOffset(18, 18),
                     BackgroundColor3 = Theme.Text,
                     BorderSizePixel = 0,
@@ -1026,11 +1219,11 @@ function KaizenUI:CreateWindow(opts)
 
                 local function render()
                     if api.Value then
-                        tween(Track, 0.15, { BackgroundColor3 = Theme.ToggleOn })
-                        tween(Knob,  0.15, { Position = UDim2.fromOffset(20, 2), BackgroundColor3 = Color3.fromRGB(12,12,14) })
+                        tween(Track, 0.18, { BackgroundColor3 = Theme.ToggleOn })
+                        tween(Knob,  0.18, { Position = UDim2.fromOffset(21, 3), BackgroundColor3 = Color3.fromRGB(12,12,14) })
                     else
-                        tween(Track, 0.15, { BackgroundColor3 = Theme.ToggleOff })
-                        tween(Knob,  0.15, { Position = UDim2.fromOffset(2, 2),  BackgroundColor3 = Theme.Text })
+                        tween(Track, 0.18, { BackgroundColor3 = Theme.ToggleOff })
+                        tween(Knob,  0.18, { Position = UDim2.fromOffset(3, 3), BackgroundColor3 = Theme.Text })
                     end
                 end
                 render()
@@ -1053,7 +1246,7 @@ function KaizenUI:CreateWindow(opts)
             end
 
             ----------------------------------------------------------------
-            -- Slider (touch-friendly)
+            -- Slider
             ----------------------------------------------------------------
             function Section:AddSlider(id, o)
                 o = o or {}
@@ -1062,35 +1255,35 @@ function KaizenUI:CreateWindow(opts)
                 local round = tonumber(o.Rounding) or 0
                 local default = tonumber(o.Default) or min
 
-                local Card = makeCard(58)
+                local Card = makeCard(64)
 
                 local Title = new("TextLabel", {
-                    Size = UDim2.new(1, -60, 0, 16),
+                    Size = UDim2.new(1, -70, 0, 18),
                     BackgroundTransparency = 1,
                     Text = o.Title or id or "Slider",
                     TextColor3 = Theme.Text,
                     Font = FontBold,
-                    TextSize = 13,
+                    TextSize = 14,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     Parent = Card,
                 })
                 local ValueLbl = new("TextLabel", {
                     AnchorPoint = Vector2.new(1, 0),
                     Position = UDim2.new(1, 0, 0, 0),
-                    Size = UDim2.fromOffset(60, 16),
+                    Size = UDim2.fromOffset(64, 18),
                     BackgroundTransparency = 1,
                     Text = tostring(default),
                     TextColor3 = Theme.SubText,
-                    Font = FontSans,
+                    Font = FontSemi,
                     TextSize = 12,
                     TextXAlignment = Enum.TextXAlignment.Right,
                     Parent = Card,
                 })
 
                 local Track = new("Frame", {
-                    Position = UDim2.fromOffset(0, 22),
+                    Position = UDim2.fromOffset(0, 26),
                     Size = UDim2.new(1, 0, 0, 6),
-                    BackgroundColor3 = Theme.BorderSubtle,
+                    BackgroundColor3 = Theme.SliderTrack,
                     BorderSizePixel = 0,
                     Parent = Card,
                 })
@@ -1104,10 +1297,9 @@ function KaizenUI:CreateWindow(opts)
                 })
                 corner(Fill, 3)
 
-                -- Enlarged invisible hit area (easier on mobile)
                 local Hit = new("TextButton", {
-                    Position = UDim2.fromOffset(0, 14),
-                    Size = UDim2.new(1, 0, 0, 24),
+                    Position = UDim2.fromOffset(0, 18),
+                    Size = UDim2.new(1, 0, 0, 26),
                     BackgroundTransparency = 1,
                     Text = "",
                     AutoButtonColor = false,
@@ -1118,8 +1310,7 @@ function KaizenUI:CreateWindow(opts)
 
                 local function fmt(v)
                     if round == 0 then return tostring(math.floor(v)) end
-                    local fmtStr = "%." .. round .. "f"
-                    return string.format(fmtStr, v)
+                    return string.format("%." .. round .. "f", v)
                 end
 
                 local function apply(v, silent)
@@ -1134,9 +1325,7 @@ function KaizenUI:CreateWindow(opts)
                     local frac = (v - min) / math.max(1e-6, (max - min))
                     Fill.Size = UDim2.fromScale(frac, 1)
                     ValueLbl.Text = fmt(v)
-                    if not silent and o.Callback then
-                        task.spawn(o.Callback, v)
-                    end
+                    if not silent and o.Callback then task.spawn(o.Callback, v) end
                 end
                 apply(default, true)
 
@@ -1178,9 +1367,7 @@ function KaizenUI:CreateWindow(opts)
                     end
                 end)
 
-                function api:SetValue(v)
-                    apply(tonumber(v) or min)
-                end
+                function api:SetValue(v) apply(tonumber(v) or min) end
 
                 if id then KaizenUI.Options[id] = api end
                 if o.Default ~= nil and o.Callback then
@@ -1194,28 +1381,29 @@ function KaizenUI:CreateWindow(opts)
             ----------------------------------------------------------------
             function Section:AddDropdown(id, o)
                 o = o or {}
-                local Card = makeCard(54)
+                local Card = makeCard(60)
 
-                local Title = new("TextLabel", {
-                    Size = UDim2.new(1, -160, 0, 16),
-                    Position = UDim2.fromOffset(0, 2),
+                local hasDesc = o.Description and o.Description ~= ""
+                new("TextLabel", {
+                    Size = UDim2.new(1, -160, 0, 18),
+                    Position = UDim2.fromOffset(0, hasDesc and 0 or 6),
                     BackgroundTransparency = 1,
                     Text = o.Title or id or "Dropdown",
                     TextColor3 = Theme.Text,
                     Font = FontBold,
-                    TextSize = 13,
+                    TextSize = 14,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     Parent = Card,
                 })
-                if o.Description then
+                if hasDesc then
                     new("TextLabel", {
-                        Size = UDim2.new(1, -160, 0, 14),
+                        Size = UDim2.new(1, -160, 0, 16),
                         Position = UDim2.fromOffset(0, 20),
                         BackgroundTransparency = 1,
                         Text = o.Description,
                         TextColor3 = Theme.SubText,
                         Font = FontSans,
-                        TextSize = 11,
+                        TextSize = 12,
                         TextXAlignment = Enum.TextXAlignment.Left,
                         Parent = Card,
                     })
@@ -1224,8 +1412,8 @@ function KaizenUI:CreateWindow(opts)
                 local Btn = new("TextButton", {
                     AnchorPoint = Vector2.new(1, 0.5),
                     Position = UDim2.new(1, 0, 0.5, 0),
-                    Size = UDim2.fromOffset(140, 30),
-                    BackgroundColor3 = Theme.GlassStrong,
+                    Size = UDim2.fromOffset(140, 32),
+                    BackgroundColor3 = Theme.Hover,
                     BorderSizePixel = 0,
                     Text = tostring(o.Default or "Select..."),
                     TextColor3 = Theme.Text,
@@ -1235,13 +1423,13 @@ function KaizenUI:CreateWindow(opts)
                     Parent = Card,
                 })
                 corner(Btn, 8)
-                stroke(Btn, Theme.Border, 1, 0.3)
-                padding(Btn, 0, 26, 0, 10)
+                stroke(Btn, Theme.Border, 1, 0.25)
+                padding(Btn, 0, 28, 0, 12)
                 Btn.TextXAlignment = Enum.TextXAlignment.Left
 
                 local Chev = new("ImageLabel", {
                     AnchorPoint = Vector2.new(1, 0.5),
-                    Position = UDim2.new(1, -8, 0.5, 0),
+                    Position = UDim2.new(1, -10, 0.5, 0),
                     Size = UDim2.fromOffset(12, 12),
                     BackgroundTransparency = 1,
                     Image = resolveIcon("chevron-down"),
@@ -1251,14 +1439,14 @@ function KaizenUI:CreateWindow(opts)
 
                 local Menu = new("Frame", {
                     Size = UDim2.fromOffset(140, 0),
-                    BackgroundColor3 = Theme.GlassStrong,
+                    BackgroundColor3 = Theme.Elevated,
                     BorderSizePixel = 0,
                     Visible = false,
                     ZIndex = 50,
                     Parent = gui,
                 })
                 corner(Menu, 8)
-                stroke(Menu, Theme.Border, 1, 0.2)
+                stroke(Menu, Theme.Border, 1, 0.15)
                 local menuLayout = Instance.new("UIListLayout")
                 menuLayout.Padding = UDim.new(0, 2)
                 menuLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -1274,8 +1462,8 @@ function KaizenUI:CreateWindow(opts)
                     table.clear(itemBtns)
                     for _, v in ipairs(api.Values) do
                         local It = new("TextButton", {
-                            Size = UDim2.new(1, 0, 0, 26),
-                            BackgroundColor3 = Theme.Card,
+                            Size = UDim2.new(1, 0, 0, 28),
+                            BackgroundColor3 = Theme.Hover,
                             BackgroundTransparency = 1,
                             BorderSizePixel = 0,
                             Text = tostring(v),
@@ -1287,9 +1475,9 @@ function KaizenUI:CreateWindow(opts)
                             ZIndex = 51,
                         })
                         corner(It, 6)
-                        padding(It, 0, 8, 0, 8)
+                        padding(It, 0, 10, 0, 10)
                         It.TextXAlignment = Enum.TextXAlignment.Left
-                        It.MouseEnter:Connect(function() tween(It, 0.1, { BackgroundTransparency = 0.3 }) end)
+                        It.MouseEnter:Connect(function() tween(It, 0.1, { BackgroundTransparency = 0 }) end)
                         It.MouseLeave:Connect(function() tween(It, 0.1, { BackgroundTransparency = 1 }) end)
                         It.MouseButton1Click:Connect(function()
                             api.Value = v
@@ -1314,7 +1502,7 @@ function KaizenUI:CreateWindow(opts)
                         local sz  = Btn.AbsoluteSize
                         Menu.Size = UDim2.fromOffset(sz.X, 0)
                         Menu.Position = UDim2.fromOffset(pos.X, pos.Y + sz.Y + 4)
-                        local h = math.min(#api.Values * 28 + 8, 160)
+                        local h = math.min(#api.Values * 30 + 8, 180)
                         tween(Menu, 0.18, { Size = UDim2.fromOffset(sz.X, h) })
                         tween(Chev, 0.18, { Rotation = 180 })
                     else
@@ -1347,16 +1535,16 @@ function KaizenUI:CreateWindow(opts)
             ----------------------------------------------------------------
             function Section:AddInput(id, o)
                 o = o or {}
-                local Card = makeCard(54)
+                local Card = makeCard(60)
 
-                local Title = new("TextLabel", {
-                    Size = UDim2.new(1, -160, 0, 16),
-                    Position = UDim2.fromOffset(0, 2),
+                new("TextLabel", {
+                    Size = UDim2.new(1, -160, 0, 18),
+                    Position = UDim2.fromOffset(0, 6),
                     BackgroundTransparency = 1,
                     Text = o.Title or id or "Input",
                     TextColor3 = Theme.Text,
                     Font = FontBold,
-                    TextSize = 13,
+                    TextSize = 14,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     Parent = Card,
                 })
@@ -1364,8 +1552,8 @@ function KaizenUI:CreateWindow(opts)
                 local Box = new("TextBox", {
                     AnchorPoint = Vector2.new(1, 0.5),
                     Position = UDim2.new(1, 0, 0.5, 0),
-                    Size = UDim2.fromOffset(140, 30),
-                    BackgroundColor3 = Theme.GlassStrong,
+                    Size = UDim2.fromOffset(140, 32),
+                    BackgroundColor3 = Theme.Hover,
                     BorderSizePixel = 0,
                     Text = tostring(o.Default or ""),
                     PlaceholderText = o.Placeholder or "",
@@ -1378,11 +1566,17 @@ function KaizenUI:CreateWindow(opts)
                     Parent = Card,
                 })
                 corner(Box, 8)
-                stroke(Box, Theme.Border, 1, 0.3)
+                local boxStroke = stroke(Box, Theme.Border, 1, 0.25)
                 padding(Box, 0, 10, 0, 10)
 
-                local api = { Value = Box.Text }
+                Box.Focused:Connect(function()
+                    tween(boxStroke, 0.15, { Color = Theme.Text, Transparency = 0 })
+                end)
+                Box.FocusLost:Connect(function()
+                    tween(boxStroke, 0.15, { Color = Theme.Border, Transparency = 0.25 })
+                end)
 
+                local api = { Value = Box.Text }
                 local function fire(text)
                     api.Value = text
                     if o.Callback then task.spawn(o.Callback, text) end
@@ -1408,33 +1602,33 @@ function KaizenUI:CreateWindow(opts)
             end
 
             ----------------------------------------------------------------
-            -- Button (section-scoped)
+            -- Button
             ----------------------------------------------------------------
             function Section:AddButton(o)
                 o = o or {}
-                local Card = makeCard(54)
-                Card.BackgroundColor3 = Theme.Card
+                local Card = makeCard(60)
 
-                local Title = new("TextLabel", {
-                    Size = UDim2.new(1, -120, 0, 16),
-                    Position = UDim2.fromOffset(0, 2),
+                local hasDesc = o.Description and o.Description ~= ""
+                new("TextLabel", {
+                    Size = UDim2.new(1, -120, 0, 18),
+                    Position = UDim2.fromOffset(0, hasDesc and 0 or 6),
                     BackgroundTransparency = 1,
                     Text = o.Title or "Button",
                     TextColor3 = Theme.Text,
                     Font = FontBold,
-                    TextSize = 13,
+                    TextSize = 14,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     Parent = Card,
                 })
-                if o.Description then
+                if hasDesc then
                     new("TextLabel", {
-                        Size = UDim2.new(1, -120, 0, 14),
+                        Size = UDim2.new(1, -120, 0, 16),
                         Position = UDim2.fromOffset(0, 20),
                         BackgroundTransparency = 1,
                         Text = o.Description,
                         TextColor3 = Theme.SubText,
                         Font = FontSans,
-                        TextSize = 11,
+                        TextSize = 12,
                         TextXAlignment = Enum.TextXAlignment.Left,
                         Parent = Card,
                     })
@@ -1443,9 +1637,8 @@ function KaizenUI:CreateWindow(opts)
                 local Btn = new("TextButton", {
                     AnchorPoint = Vector2.new(1, 0.5),
                     Position = UDim2.new(1, 0, 0.5, 0),
-                    Size = UDim2.fromOffset(100, 28),
+                    Size = UDim2.fromOffset(100, 30),
                     BackgroundColor3 = Theme.Accent,
-                    BackgroundTransparency = 0.05,
                     BorderSizePixel = 0,
                     Text = o.ButtonText or "Run",
                     TextColor3 = Color3.fromRGB(12, 12, 14),
@@ -1455,8 +1648,12 @@ function KaizenUI:CreateWindow(opts)
                     Parent = Card,
                 })
                 corner(Btn, 8)
-                Btn.MouseEnter:Connect(function() tween(Btn, 0.12, { BackgroundTransparency = 0 }) end)
-                Btn.MouseLeave:Connect(function() tween(Btn, 0.12, { BackgroundTransparency = 0.05 }) end)
+                Btn.MouseEnter:Connect(function()
+                    tween(Btn, 0.12, { BackgroundColor3 = Color3.fromRGB(230, 230, 235) })
+                end)
+                Btn.MouseLeave:Connect(function()
+                    tween(Btn, 0.12, { BackgroundColor3 = Theme.Accent })
+                end)
                 Btn.MouseButton1Click:Connect(function()
                     if o.Callback then task.spawn(o.Callback) end
                 end)
@@ -1464,32 +1661,31 @@ function KaizenUI:CreateWindow(opts)
             end
 
             ----------------------------------------------------------------
-            -- Paragraph (section-scoped)
+            -- Paragraph
             ----------------------------------------------------------------
             function Section:AddParagraph(o)
                 o = o or {}
                 local Card = new("Frame", {
                     Size = UDim2.new(1, 0, 0, 0),
                     AutomaticSize = Enum.AutomaticSize.Y,
-                    BackgroundColor3 = Theme.Card,
-                    BackgroundTransparency = 0.2,
+                    BackgroundColor3 = Theme.Elevated,
                     BorderSizePixel = 0,
                     Parent = Container,
                 })
                 corner(Card, 10)
-                stroke(Card, Theme.BorderSubtle, 1, 0.2)
-                padding(Card, 10, 14, 12, 14)
+                stroke(Card, Theme.Border, 1, 0.35)
+                padding(Card, 12, 16, 14, 16)
                 local lay = Instance.new("UIListLayout")
-                lay.Padding = UDim.new(0, 4)
+                lay.Padding = UDim.new(0, 6)
                 lay.SortOrder = Enum.SortOrder.LayoutOrder
                 lay.Parent = Card
                 new("TextLabel", {
-                    Size = UDim2.new(1, 0, 0, 16),
+                    Size = UDim2.new(1, 0, 0, 18),
                     BackgroundTransparency = 1,
                     Text = o.Title or "",
                     TextColor3 = Theme.Text,
                     Font = FontBold,
-                    TextSize = 13,
+                    TextSize = 14,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     Parent = Card,
                 })
@@ -1513,20 +1709,19 @@ function KaizenUI:CreateWindow(opts)
         end
 
         ----------------------------------------------------------------
-        -- Tab-level convenience wrappers (some scripts add controls
-        -- directly on the tab instead of creating an explicit section).
+        -- Tab-level convenience wrappers
         ----------------------------------------------------------------
         local rootSection
         local function getRootSection()
             if not rootSection then rootSection = Tab:AddSection(nil) end
             return rootSection
         end
-        function Tab:AddButton(o)    return getRootSection():AddButton(o)    end
-        function Tab:AddParagraph(o) return getRootSection():AddParagraph(o) end
-        function Tab:AddToggle(id, o)   return getRootSection():AddToggle(id, o)   end
-        function Tab:AddSlider(id, o)   return getRootSection():AddSlider(id, o)   end
+        function Tab:AddButton(o)       return getRootSection():AddButton(o) end
+        function Tab:AddParagraph(o)    return getRootSection():AddParagraph(o) end
+        function Tab:AddToggle(id, o)   return getRootSection():AddToggle(id, o) end
+        function Tab:AddSlider(id, o)   return getRootSection():AddSlider(id, o) end
         function Tab:AddDropdown(id, o) return getRootSection():AddDropdown(id, o) end
-        function Tab:AddInput(id, o)    return getRootSection():AddInput(id, o)    end
+        function Tab:AddInput(id, o)    return getRootSection():AddInput(id, o) end
 
         table.insert(Window._ordered, Tab)
         Window.Tabs[name] = Tab
@@ -1545,15 +1740,22 @@ function KaizenUI:CreateWindow(opts)
     end
 
     function Window:Destroy() gui:Destroy() end
+    function Window:Dialog() end -- back-compat
 
-    -- Back-compat no-ops (SaveManager/InterfaceManager hooks etc.)
-    function Window:Dialog() end
+    -- Open animation
+    Root.Size = UDim2.fromOffset(0, 0)
+    Root.BackgroundTransparency = 1
+    updateResponsive()
+    local targetSize = Root.Size
+    Root.Size = UDim2.fromOffset(math.floor(targetSize.X.Offset * 0.9), math.floor(targetSize.Y.Offset * 0.9))
+    Root.BackgroundTransparency = 0
+    tween(Root, 0.28, { Size = targetSize }, Enum.EasingStyle.Quint)
 
     return Window
 end
 
--- Allow both `local X = loadstring(...)() ; X:CreateWindow(...)` and
--- `local X = loadstring(...)() ; X.KaizenUI:CreateWindow(...)`
+-- Allow both `local X = loadstring(...)(); X:CreateWindow(...)` and
+-- `local X = loadstring(...)(); X.KaizenUI:CreateWindow(...)`
 KaizenUI.KaizenUI = KaizenUI
 
 return KaizenUI
