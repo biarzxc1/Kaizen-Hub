@@ -215,27 +215,36 @@ function KaizenUI:CreateWindow(cfg)
     local mobile = isMobile()
     local defaultSize = mobile and UDim2.fromOffset(360, 420) or UDim2.fromOffset(820, 520)
 
-    -- parent (try CoreGui via gethui, fallback to PlayerGui)
-    local guiParent
-    local ok = pcall(function()
-        if gethui then guiParent = gethui() end
-    end)
-    if not guiParent then
-        ok = pcall(function() guiParent = CoreGui end)
-        if not ok or not guiParent then guiParent = PlayerGui end
-    end
-
-    -- destroy any existing instance
-    local existing = guiParent:FindFirstChild("KaizenUI")
-    if existing then existing:Destroy() end
-
+    -- parent (try gethui → CoreGui → PlayerGui). Protected with pcall
+    -- because CoreGui parenting errors in a vanilla LocalScript.
     local ScreenGui = new("ScreenGui", {
         Name = "KaizenUI",
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         IgnoreGuiInset = true,
-        Parent = guiParent,
     })
+
+    local function tryParent(target)
+        if not target then return false end
+        local ok = pcall(function()
+            local existing = target:FindFirstChild("KaizenUI")
+            if existing then existing:Destroy() end
+            ScreenGui.Parent = target
+        end)
+        return ok and ScreenGui.Parent == target
+    end
+
+    local parented = false
+    if typeof(gethui) == "function" then
+        local ok, hui = pcall(gethui)
+        if ok then parented = tryParent(hui) end
+    end
+    if not parented then parented = tryParent(CoreGui) end
+    if not parented then parented = tryParent(PlayerGui) end
+    if not parented then
+        warn("[KaizenUI] Could not parent ScreenGui; falling back to PlayerGui")
+        ScreenGui.Parent = PlayerGui
+    end
 
     -- Root window
     local Root = new("Frame", {
@@ -1088,5 +1097,9 @@ function KaizenUI:CreateWindow(cfg)
 
     return Window
 end
+
+-- Allow both `local L = loadstring(...)() ; L:CreateWindow(...)`
+-- and `local L = loadstring(...)() ; L.KaizenUI:CreateWindow(...)`
+KaizenUI.KaizenUI = KaizenUI
 
 return KaizenUI
