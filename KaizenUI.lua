@@ -79,8 +79,10 @@ local FontSemi = Enum.Font.GothamMedium
 local Icons = {
     activity         = "rbxassetid://10709752035",
     backpack         = "rbxassetid://10709769841",
-    ["chevron-down"] = "rbxassetid://10709790948",
-    ["chevron-up"]   = "rbxassetid://10709791523",
+    ["chevron-down"]  = "rbxassetid://10709790948",
+    ["chevron-up"]    = "rbxassetid://10709791523",
+    ["chevron-right"] = "rbxassetid://10709791437",
+    menu              = "rbxassetid://10734898355",
     cog              = "rbxassetid://10709810948",
     crosshair        = "rbxassetid://10709818534",
     eye              = "rbxassetid://10723346959",
@@ -275,8 +277,20 @@ local function parentGui(guiName)
         Name = guiName or "KaizenUI",
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-        IgnoreGuiInset = true,
+        -- IMPORTANT: set to false so the window is centred inside Roblox's
+        -- safe area on mobile (the old `true` caused the window to sit
+        -- underneath Roblox's top-left menu/chat/voice buttons).
+        IgnoreGuiInset = false,
+        DisplayOrder = 1000, -- float above game HUDs
     })
+    -- Some executors' gethui / CoreGui don't apply `ScreenInsets`, so we
+    -- only set it if supported. `DeviceSafeInsets` keeps the window clear
+    -- of the notch, status bar and Roblox controls on modern phones.
+    pcall(function()
+        if Enum.ScreenInsets and Enum.ScreenInsets.DeviceSafeInsets then
+            gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+        end
+    end)
     local function tryParent(target)
         if not target then return false end
         local ok = pcall(function()
@@ -592,6 +606,31 @@ function KaizenUI:CreateWindow(opts)
         Parent = TopBar,
     })
 
+    -- Mobile hamburger (shown only on narrow screens). On tap, toggles an
+    -- overlay drawer that shows the tab sidebar. This keeps the window
+    -- usable with one hand on phones.
+    local Hamburger = new("ImageButton", {
+        Name = "Hamburger",
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, 0, 0.5, 0),
+        Size = UDim2.fromOffset(36, 36),
+        BackgroundColor3 = Theme.Elevated,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Image = resolveIcon("menu"),
+        ImageColor3 = Theme.Text,
+        AutoButtonColor = false,
+        Visible = false,
+        Parent = TopBar,
+    })
+    corner(Hamburger, 8)
+    Hamburger.MouseEnter:Connect(function()
+        tween(Hamburger, 0.15, { BackgroundTransparency = 0 })
+    end)
+    Hamburger.MouseLeave:Connect(function()
+        tween(Hamburger, 0.15, { BackgroundTransparency = 1 })
+    end)
+
     -- Branded logo badge
     local LogoWrap = new("Frame", {
         AnchorPoint = Vector2.new(0, 0.5),
@@ -735,6 +774,22 @@ function KaizenUI:CreateWindow(opts)
         Parent = Content,
     })
 
+    -- Scrim that appears behind the mobile drawer to dim the content and
+    -- capture taps (tapping it closes the drawer).
+    local Scrim = new("TextButton", {
+        Name = "Scrim",
+        Size = UDim2.fromScale(1, 1),
+        Position = UDim2.fromScale(0, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+        Text = "",
+        Visible = false,
+        ZIndex = 50,
+        Parent = Root,
+    })
+
     ----------------------------------------------------------------
     -- Dragging (header) + minimize to pill
     ----------------------------------------------------------------
@@ -800,72 +855,149 @@ function KaizenUI:CreateWindow(opts)
 
     ----------------------------------------------------------------
     -- Responsive sizing (PC / laptop / mobile)
+    --
+    -- Mobile behaviour:
+    --   • Window fits inside the device safe area (96% x 90% viewport, capped).
+    --   • Sidebar is hidden by default; a hamburger in the TopBar slides it
+    --     in as a drawer that overlays the content. Tapping the scrim or
+    --     picking a tab closes the drawer.
+    -- Desktop behaviour:
+    --   • Sidebar is always visible and in-flow.
     ----------------------------------------------------------------
     local function isTouchOnly()
         return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
     end
 
+    local narrowState   = false
+    local drawerOpen    = false
+    local topBarH       = 56
+
+    local function applyDrawerState()
+        if not narrowState then
+            Sidebar.Visible = true
+            Scrim.Visible   = false
+            return
+        end
+        Sidebar.Visible = true
+        Sidebar.ZIndex  = 60
+        if drawerOpen then
+            Scrim.Visible = true
+            tween(Scrim,   0.18, { BackgroundTransparency = 0.45 })
+            tween(Sidebar, 0.2,  { Position = UDim2.new(0, 0, 0, topBarH) })
+        else
+            tween(Scrim,   0.18, { BackgroundTransparency = 1 })
+            tween(Sidebar, 0.2,  { Position = UDim2.new(0, -Sidebar.AbsoluteSize.X - 4, 0, topBarH) })
+            task.delay(0.22, function()
+                if not drawerOpen then Scrim.Visible = false end
+            end)
+        end
+    end
+
+    local function openDrawer()  drawerOpen = true;  applyDrawerState() end
+    local function closeDrawer() drawerOpen = false; applyDrawerState() end
+
+    Hamburger.MouseButton1Click:Connect(function()
+        drawerOpen = not drawerOpen
+        applyDrawerState()
+    end)
+    Scrim.MouseButton1Click:Connect(closeDrawer)
+
     local function updateResponsive()
         local cam = Workspace.CurrentCamera
         local vp = (cam and cam.ViewportSize) or Vector2.new(1280, 720)
         local touch  = isTouchOnly()
-        local small  = vp.X < 820 or vp.Y < 540
+        -- Treat anything below 900 width (or 560 height) as narrow. This
+        -- catches landscape-phone Roblox clients whose viewport reports
+        -- ~1200x540 but still needs the drawer UX for finger control.
+        local small  = vp.X < 900 or vp.Y < 560
         local narrow = touch or small
+        narrowState  = narrow
 
-        SubLbl.Visible = (vp.X >= 720) and subtitle ~= ""
+        SubLbl.Visible = subtitle ~= "" and (narrow and vp.X >= 560 or vp.X >= 720)
 
         if narrow then
-            local w = math.clamp(math.floor(vp.X * 0.94), 340, 620)
-            local h = math.clamp(math.floor(vp.Y * 0.86), 360, 520)
+            topBarH = 54
+
+            local w = math.clamp(math.floor(vp.X * 0.96), 320, 640)
+            local h = math.clamp(math.floor(vp.Y * 0.90), 340, 520)
             if sizeOpt and typeof(sizeOpt) == "UDim2" then
                 if sizeOpt.X.Offset > 0 then w = math.min(w, sizeOpt.X.Offset) end
                 if sizeOpt.Y.Offset > 0 then h = math.min(h, sizeOpt.Y.Offset) end
             end
             Root.Size = UDim2.fromOffset(w, h)
 
-            local sw = math.clamp(math.floor(w * 0.34), 120, 170)
-            Sidebar.Size     = UDim2.new(0, sw, 1, -52)
-            Content.Size     = UDim2.new(1, -sw, 1, -52)
-            Content.Position = UDim2.new(0, sw, 0, 52)
+            -- Drawer width scales with the window but stays tap-friendly.
+            local drawerW = math.clamp(math.floor(w * 0.52), 180, 240)
 
-            TopBar.Size = UDim2.new(1, 0, 0, 52)
-            Sidebar.Position = UDim2.new(0, 0, 0, 52)
+            TopBar.Size = UDim2.new(1, 0, 0, topBarH)
 
-            ContentPad.PaddingTop    = UDim.new(0, 16)
-            ContentPad.PaddingBottom = UDim.new(0, 16)
-            ContentPad.PaddingLeft   = UDim.new(0, 18)
-            ContentPad.PaddingRight  = UDim.new(0, 18)
+            -- Mobile: sidebar is an overlay drawer.
+            Sidebar.Size     = UDim2.new(0, drawerW, 1, -topBarH)
+            Content.Position = UDim2.new(0, 0, 0, topBarH)
+            Content.Size     = UDim2.new(1, 0, 1, -topBarH)
 
-            TopBarPad.PaddingLeft  = UDim.new(0, 12)
-            TopBarPad.PaddingRight = UDim.new(0, 12)
+            -- Hamburger visible, logo + title shifted to make room for it.
+            Hamburger.Visible  = true
+            Hamburger.Position = UDim2.new(0, 0, 0.5, 0)
+            LogoWrap.Position  = UDim2.new(0, 44, 0.5, 0)
+            LogoWrap.Size      = UDim2.fromOffset(32, 32)
+            TitleLbl.Position  = UDim2.new(0, 86, 0.5, 0)
+            TitleLbl.TextSize  = 15
+            TitleLbl.Size      = UDim2.fromOffset(110, 20)
+            SubLbl.Position    = UDim2.new(0, 202, 0.5, 0)
+            SubLbl.Size        = UDim2.new(1, -240, 0, 16)
+            SubLbl.TextSize    = 12
 
-            TitleLbl.TextSize = 14
-            TitleLbl.Size = UDim2.fromOffset(96, 20)
-            SubLbl.Position = UDim2.new(0, 148, 0.5, 0)
-            SubLbl.TextSize = 11
+            -- Larger, finger-friendly window controls (close + minimize).
+            CloseBtn.Size = UDim2.fromOffset(32, 32)
+            MinBtn.Size   = UDim2.fromOffset(32, 32)
+            MinBtn.Position = UDim2.new(1, -40, 0.5, 0)
+
+            TopBarPad.PaddingLeft  = UDim.new(0, 10)
+            TopBarPad.PaddingRight = UDim.new(0, 10)
+
+            ContentPad.PaddingTop    = UDim.new(0, 14)
+            ContentPad.PaddingBottom = UDim.new(0, 14)
+            ContentPad.PaddingLeft   = UDim.new(0, 16)
+            ContentPad.PaddingRight  = UDim.new(0, 16)
 
             SidebarPad.PaddingLeft   = UDim.new(0, 10)
             SidebarPad.PaddingRight  = UDim.new(0, 10)
             SidebarPad.PaddingTop    = UDim.new(0, 10)
             SidebarPad.PaddingBottom = UDim.new(0, 10)
         else
-            local w = 880
-            local h = 560
-            if sizeOpt and typeof(sizeOpt) == "UDim2" then
-                if sizeOpt.X.Offset > 0 then w = sizeOpt.X.Offset end
-                if sizeOpt.Y.Offset > 0 then h = sizeOpt.Y.Offset end
-            end
-            -- Clamp to viewport with comfortable margin
+            topBarH = 56
+
+            local w = sizeOpt and typeof(sizeOpt) == "UDim2" and sizeOpt.X.Offset > 0 and sizeOpt.X.Offset or 880
+            local h = sizeOpt and typeof(sizeOpt) == "UDim2" and sizeOpt.Y.Offset > 0 and sizeOpt.Y.Offset or 560
             w = math.min(w, math.floor(vp.X * 0.92))
             h = math.min(h, math.floor(vp.Y * 0.92))
             Root.Size = UDim2.fromOffset(w, h)
 
-            Sidebar.Size     = UDim2.new(0, tabW, 1, -56)
-            Content.Size     = UDim2.new(1, -tabW, 1, -56)
-            Content.Position = UDim2.new(0, tabW, 0, 56)
-            Sidebar.Position = UDim2.new(0, 0, 0, 56)
+            Sidebar.Size     = UDim2.new(0, tabW, 1, -topBarH)
+            Sidebar.Position = UDim2.new(0, 0, 0, topBarH)
+            Sidebar.ZIndex   = 1
+            Content.Size     = UDim2.new(1, -tabW, 1, -topBarH)
+            Content.Position = UDim2.new(0, tabW, 0, topBarH)
+            TopBar.Size      = UDim2.new(1, 0, 0, topBarH)
 
-            TopBar.Size = UDim2.new(1, 0, 0, 56)
+            Hamburger.Visible = false
+            drawerOpen        = false
+            Scrim.Visible     = false
+            Scrim.BackgroundTransparency = 1
+
+            LogoWrap.Position = UDim2.new(0, 0, 0.5, 0)
+            LogoWrap.Size     = UDim2.fromOffset(34, 34)
+            TitleLbl.Position = UDim2.new(0, 46, 0.5, 0)
+            TitleLbl.Size     = UDim2.fromOffset(120, 22)
+            TitleLbl.TextSize = 16
+            SubLbl.Position   = UDim2.new(0, 172, 0.5, 0)
+            SubLbl.Size       = UDim2.new(1, -260, 0, 18)
+            SubLbl.TextSize   = 13
+
+            CloseBtn.Size = UDim2.fromOffset(26, 26)
+            MinBtn.Size   = UDim2.fromOffset(26, 26)
+            MinBtn.Position = UDim2.new(1, -32, 0.5, 0)
 
             ContentPad.PaddingTop    = UDim.new(0, 22)
             ContentPad.PaddingBottom = UDim.new(0, 22)
@@ -875,16 +1007,13 @@ function KaizenUI:CreateWindow(opts)
             TopBarPad.PaddingLeft  = UDim.new(0, 16)
             TopBarPad.PaddingRight = UDim.new(0, 16)
 
-            TitleLbl.TextSize = 16
-            TitleLbl.Size = UDim2.fromOffset(120, 22)
-            SubLbl.Position = UDim2.new(0, 172, 0.5, 0)
-            SubLbl.TextSize = 13
-
             SidebarPad.PaddingLeft   = UDim.new(0, 12)
             SidebarPad.PaddingRight  = UDim.new(0, 12)
             SidebarPad.PaddingTop    = UDim.new(0, 12)
             SidebarPad.PaddingBottom = UDim.new(0, 12)
         end
+
+        applyDrawerState()
     end
 
     if Workspace.CurrentCamera then
@@ -892,6 +1021,14 @@ function KaizenUI:CreateWindow(opts)
     end
     UserInputService.LastInputTypeChanged:Connect(updateResponsive)
     updateResponsive()
+
+    -- Expose drawer controls so AddTab can auto-close the drawer after a
+    -- tab is picked on mobile.
+    local _drawer = {
+        isNarrow  = function() return narrowState end,
+        close     = closeDrawer,
+        open      = openDrawer,
+    }
 
     ----------------------------------------------------------------
     -- Window object
@@ -973,12 +1110,13 @@ function KaizenUI:CreateWindow(opts)
         local Tab = {}
         Tab.Name = name
 
-        -- Sidebar button
+        -- Sidebar button — 44px tall for comfortable touch targets.
         local Btn = new("TextButton", {
-            Size = UDim2.new(1, 0, 0, 40),
+            Size = UDim2.new(1, 0, 0, 44),
             BackgroundColor3 = Theme.Active,
             BackgroundTransparency = 1,
             AutoButtonColor = false,
+            Active = true,
             Text = "",
             BorderSizePixel = 0,
             Parent = TabList,
@@ -1051,7 +1189,12 @@ function KaizenUI:CreateWindow(opts)
         Tab._label  = Lbl
         Tab._page   = Page
 
-        Btn.MouseButton1Click:Connect(function() selectTab(Tab) end)
+        Btn.MouseButton1Click:Connect(function()
+            selectTab(Tab)
+            -- Close the mobile drawer automatically after picking a tab,
+            -- just like native hamburger-drawer UX.
+            if _drawer and _drawer.isNarrow() then _drawer.close() end
+        end)
 
         ----------------------------------------------------------------
         -- Section
