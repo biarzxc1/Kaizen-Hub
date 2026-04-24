@@ -564,6 +564,7 @@ function KaizenUI:CreateWindow(opts)
         Size = UDim2.fromOffset(880, 560),
         BackgroundColor3 = Theme.Background,
         BorderSizePixel = 0,
+        Active = true,              -- block click-through to workspace
         Parent = gui,
         ClipsDescendants = true,
     })
@@ -578,6 +579,7 @@ function KaizenUI:CreateWindow(opts)
         Size = UDim2.new(1, 0, 0, 56),
         BackgroundColor3 = Theme.Background,
         BorderSizePixel = 0,
+        Active = true,              -- eat clicks, incl. over logo
         Parent = Root,
     })
     local TopBarPad = padding(TopBar, 0, 16, 0, 16)
@@ -596,10 +598,23 @@ function KaizenUI:CreateWindow(opts)
         Position = UDim2.new(0, 0, 0.5, 0),
         Size = UDim2.fromOffset(34, 34),
         BackgroundTransparency = 1,
+        Active = true,              -- consume input so game doesn't receive click
         Parent = TopBar,
     })
     local LogoBadge, LogoImg = makeLogoBadge(LogoWrap, 34, logoId)
     LogoBadge.Size = UDim2.fromScale(1, 1)
+    LogoBadge.Active = true
+    -- Also put an invisible ImageButton on top so every click/touch on the
+    -- logo is absorbed (Frames pass touch events through on some devices).
+    local LogoHit = new("ImageButton", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Image = "",
+        AutoButtonColor = false,
+        Parent = LogoWrap,
+        ZIndex = 5,
+    })
+    LogoHit.MouseButton1Click:Connect(function() end) -- intentionally empty
 
     local TitleLbl = new("TextLabel", {
         Name = "Title",
@@ -664,6 +679,7 @@ function KaizenUI:CreateWindow(opts)
         Size = UDim2.new(0, tabW, 1, -56),
         BackgroundColor3 = Theme.Background,
         BorderSizePixel = 0,
+        Active = true,              -- block click-through
         Parent = Root,
     })
     local SidebarPad = padding(Sidebar, 12, 12, 12, 12)
@@ -677,73 +693,26 @@ function KaizenUI:CreateWindow(opts)
         Parent = Sidebar,
     })
 
-    -- Tab scroll list
+    -- Tab scroll list (fills the whole sidebar; the "Injecting..." status
+    -- pill was removed per design request — it now lives only on the splash
+    -- loader).
     local TabList = new("ScrollingFrame", {
         Name = "TabList",
-        Size = UDim2.new(1, 0, 1, -68), -- leave room for status pill at bottom
+        Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         ScrollBarThickness = 0,
         CanvasSize = UDim2.new(0, 0, 0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         ScrollingDirection = Enum.ScrollingDirection.Y,
+        ElasticBehavior = Enum.ElasticBehavior.Never,
+        Active = true,
         Parent = Sidebar,
     })
     local tabsLayout = Instance.new("UIListLayout")
     tabsLayout.Padding = UDim.new(0, 4)
     tabsLayout.SortOrder = Enum.SortOrder.LayoutOrder
     tabsLayout.Parent = TabList
-
-    -- Status pill at bottom of sidebar ("Injecting... Please wait")
-    local StatusPill = new("Frame", {
-        Name = "StatusPill",
-        AnchorPoint = Vector2.new(0, 1),
-        Position = UDim2.new(0, 0, 1, 0),
-        Size = UDim2.new(1, 0, 0, 56),
-        BackgroundColor3 = Theme.Elevated,
-        BorderSizePixel = 0,
-        Visible = false,
-        Parent = Sidebar,
-    })
-    corner(StatusPill, 10)
-    stroke(StatusPill, Theme.Border, 1, 0.3)
-    padding(StatusPill, 0, 12, 0, 12)
-
-    local SpinnerWrap = new("Frame", {
-        AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 0, 0.5, 0),
-        Size = UDim2.fromOffset(28, 28),
-        BackgroundTransparency = 1,
-        Parent = StatusPill,
-    })
-    local statusSpinner, stopStatusSpinner = makeSpinner(SpinnerWrap, 28, Theme.Text)
-    statusSpinner.AnchorPoint = Vector2.new(0.5, 0.5)
-    statusSpinner.Position = UDim2.fromScale(0.5, 0.5)
-
-    local StatusTitle = new("TextLabel", {
-        Position = UDim2.fromOffset(36, 8),
-        Size = UDim2.new(1, -40, 0, 18),
-        BackgroundTransparency = 1,
-        Text = "Injecting...",
-        TextColor3 = Theme.Text,
-        Font = FontBold,
-        TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd,
-        Parent = StatusPill,
-    })
-    local StatusSub = new("TextLabel", {
-        Position = UDim2.fromOffset(36, 26),
-        Size = UDim2.new(1, -40, 0, 16),
-        BackgroundTransparency = 1,
-        Text = "Please wait",
-        TextColor3 = Theme.SubText,
-        Font = FontSans,
-        TextSize = 11,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd,
-        Parent = StatusPill,
-    })
 
     ----------------------------------------------------------------
     -- Content area
@@ -754,6 +723,7 @@ function KaizenUI:CreateWindow(opts)
         Size = UDim2.new(1, -tabW, 1, -56),
         BackgroundColor3 = Theme.Background,
         BorderSizePixel = 0,
+        Active = true,              -- block click-through on content area
         Parent = Root,
     })
     local ContentPad = padding(Content, 22, 28, 22, 28)
@@ -825,7 +795,6 @@ function KaizenUI:CreateWindow(opts)
     CloseBtn.MouseButton1Click:Connect(function()
         tween(Root, 0.2, { Size = UDim2.fromOffset(0, 0), BackgroundTransparency = 1 })
         task.wait(0.22)
-        if stopStatusSpinner then stopStatusSpinner() end
         gui:Destroy()
     end)
 
@@ -879,8 +848,6 @@ function KaizenUI:CreateWindow(opts)
             SidebarPad.PaddingRight  = UDim.new(0, 10)
             SidebarPad.PaddingTop    = UDim.new(0, 10)
             SidebarPad.PaddingBottom = UDim.new(0, 10)
-
-            StatusPill.Size = UDim2.new(1, 0, 0, 52)
         else
             local w = 880
             local h = 560
@@ -917,8 +884,6 @@ function KaizenUI:CreateWindow(opts)
             SidebarPad.PaddingRight  = UDim.new(0, 12)
             SidebarPad.PaddingTop    = UDim.new(0, 12)
             SidebarPad.PaddingBottom = UDim.new(0, 12)
-
-            StatusPill.Size = UDim2.new(1, 0, 0, 56)
         end
     end
 
@@ -938,25 +903,11 @@ function KaizenUI:CreateWindow(opts)
     Window.ScreenGui = gui
     Window.Root = Root
 
-    -- Status pill public API
-    function Window:SetStatus(opts)
-        opts = opts or {}
-        if opts.Visible == false then
-            tween(StatusPill, 0.2, { BackgroundTransparency = 1 })
-            task.delay(0.22, function()
-                if StatusPill.Parent then StatusPill.Visible = false end
-            end)
-            return
-        end
-        StatusTitle.Text = tostring(opts.Title    or "Injecting...")
-        StatusSub.Text   = tostring(opts.Subtitle or "Please wait")
-        StatusPill.Visible = true
-        StatusPill.BackgroundTransparency = 1
-        tween(StatusPill, 0.2, { BackgroundTransparency = 0 })
-    end
-    function Window:HideStatus()
-        self:SetStatus({ Visible = false })
-    end
+    -- Status pill was removed from the sidebar per design request.
+    -- Keep the SetStatus / HideStatus API as no-ops so existing scripts
+    -- (e.g. the Kaizen Hub main script) continue to work unmodified.
+    function Window:SetStatus(_opts) end
+    function Window:HideStatus() end
 
     ----------------------------------------------------------------
     -- Page title block ("Visuals / Adjust visual enhancements...")
@@ -1146,6 +1097,7 @@ function KaizenUI:CreateWindow(opts)
                     Size = UDim2.new(1, 0, 0, height or 60),
                     BackgroundColor3 = Theme.Elevated,
                     BorderSizePixel = 0,
+                    Active = true,     -- consume clicks (no game click-through)
                     Parent = Container,
                 })
                 corner(Card, 10)
@@ -1212,6 +1164,8 @@ function KaizenUI:CreateWindow(opts)
                     Size = UDim2.new(1, 0, 1, 0),
                     BackgroundTransparency = 1,
                     Text = "",
+                    AutoButtonColor = false,
+                    Active = true,
                     Parent = Card,
                 })
 
@@ -1234,6 +1188,14 @@ function KaizenUI:CreateWindow(opts)
                     if o.Callback then task.spawn(o.Callback, api.Value) end
                 end
 
+                -- Whole-card hover + press feedback so it's obvious the
+                -- entire box is clickable (not just the switch).
+                HitBtn.MouseEnter:Connect(function()
+                    tween(Card, 0.12, { BackgroundColor3 = Theme.Hover })
+                end)
+                HitBtn.MouseLeave:Connect(function()
+                    tween(Card, 0.12, { BackgroundColor3 = Theme.Elevated })
+                end)
                 HitBtn.MouseButton1Click:Connect(function()
                     api:SetValue(not api.Value)
                 end)
@@ -1250,15 +1212,15 @@ function KaizenUI:CreateWindow(opts)
             ----------------------------------------------------------------
             function Section:AddSlider(id, o)
                 o = o or {}
-                local min  = tonumber(o.Min) or 0
-                local max  = tonumber(o.Max) or 100
-                local round = tonumber(o.Rounding) or 0
-                local default = tonumber(o.Default) or min
+                local min     = tonumber(o.Min) or 0
+                local max     = tonumber(o.Max) or 100
+                local round   = tonumber(o.Rounding) or 0
+                local default = math.clamp(tonumber(o.Default) or min, min, max)
 
-                local Card = makeCard(64)
+                local Card = makeCard(72) -- bigger card => bigger touch area
 
                 local Title = new("TextLabel", {
-                    Size = UDim2.new(1, -70, 0, 18),
+                    Size = UDim2.new(1, -80, 0, 18),
                     BackgroundTransparency = 1,
                     Text = o.Title or id or "Slider",
                     TextColor3 = Theme.Text,
@@ -1270,22 +1232,37 @@ function KaizenUI:CreateWindow(opts)
                 local ValueLbl = new("TextLabel", {
                     AnchorPoint = Vector2.new(1, 0),
                     Position = UDim2.new(1, 0, 0, 0),
-                    Size = UDim2.fromOffset(64, 18),
+                    Size = UDim2.fromOffset(74, 18),
                     BackgroundTransparency = 1,
                     Text = tostring(default),
-                    TextColor3 = Theme.SubText,
+                    TextColor3 = Theme.Text,
                     Font = FontSemi,
-                    TextSize = 12,
+                    TextSize = 13,
                     TextXAlignment = Enum.TextXAlignment.Right,
                     Parent = Card,
                 })
 
+                -- Hit area: a tall, invisible TextButton wrapping the track.
+                -- A bigger hit area + handling MouseMovement / Touch on the
+                -- element itself (rather than UserInputService globally) makes
+                -- the slider feel smooth on both desktop and mobile.
+                local Hit = new("TextButton", {
+                    Position = UDim2.fromOffset(0, 22),
+                    Size = UDim2.new(1, 0, 0, 36),
+                    BackgroundTransparency = 1,
+                    Text = "",
+                    AutoButtonColor = false,
+                    Active = true,
+                    Parent = Card,
+                })
+
                 local Track = new("Frame", {
-                    Position = UDim2.fromOffset(0, 26),
+                    AnchorPoint = Vector2.new(0, 0.5),
+                    Position = UDim2.new(0, 0, 0.5, 0),
                     Size = UDim2.new(1, 0, 0, 6),
                     BackgroundColor3 = Theme.SliderTrack,
                     BorderSizePixel = 0,
-                    Parent = Card,
+                    Parent = Hit,
                 })
                 corner(Track, 3)
 
@@ -1297,14 +1274,17 @@ function KaizenUI:CreateWindow(opts)
                 })
                 corner(Fill, 3)
 
-                local Hit = new("TextButton", {
-                    Position = UDim2.fromOffset(0, 18),
-                    Size = UDim2.new(1, 0, 0, 26),
-                    BackgroundTransparency = 1,
-                    Text = "",
-                    AutoButtonColor = false,
-                    Parent = Card,
+                -- Draggable knob (appears on the track at the current value)
+                local Knob = new("Frame", {
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    Position = UDim2.new(0, 0, 0.5, 0),
+                    Size = UDim2.fromOffset(14, 14),
+                    BackgroundColor3 = Theme.Text,
+                    BorderSizePixel = 0,
+                    ZIndex = 3,
+                    Parent = Track,
                 })
+                corner(Knob, 7)
 
                 local api = { Value = default }
 
@@ -1313,7 +1293,7 @@ function KaizenUI:CreateWindow(opts)
                     return string.format("%." .. round .. "f", v)
                 end
 
-                local function apply(v, silent)
+                local function apply(v, silent, animate)
                     v = math.clamp(v, min, max)
                     if round > 0 then
                         local mult = 10 ^ round
@@ -1323,51 +1303,63 @@ function KaizenUI:CreateWindow(opts)
                     end
                     api.Value = v
                     local frac = (v - min) / math.max(1e-6, (max - min))
-                    Fill.Size = UDim2.fromScale(frac, 1)
+                    if animate then
+                        tween(Fill, 0.08, { Size = UDim2.fromScale(frac, 1) })
+                        tween(Knob, 0.08, { Position = UDim2.new(frac, 0, 0.5, 0) })
+                    else
+                        Fill.Size     = UDim2.fromScale(frac, 1)
+                        Knob.Position = UDim2.new(frac, 0, 0.5, 0)
+                    end
                     ValueLbl.Text = fmt(v)
                     if not silent and o.Callback then task.spawn(o.Callback, v) end
                 end
                 apply(default, true)
 
                 local dragging = false
+                local moveConn, endConn
                 local function setFromX(xPos)
-                    local abs = Track.AbsolutePosition.X
-                    local sz  = Track.AbsoluteSize.X
+                    local abs  = Track.AbsolutePosition.X
+                    local sz   = Track.AbsoluteSize.X
                     local frac = math.clamp((xPos - abs) / math.max(1, sz), 0, 1)
                     apply(min + (max - min) * frac)
+                end
+
+                local function stopDrag()
+                    dragging = false
+                    if moveConn then moveConn:Disconnect() moveConn = nil end
+                    if endConn  then endConn:Disconnect()  endConn  = nil end
+                    tween(Knob, 0.1, { Size = UDim2.fromOffset(14, 14) })
                 end
 
                 Hit.InputBegan:Connect(function(input)
                     if input.UserInputType == Enum.UserInputType.MouseButton1
                     or input.UserInputType == Enum.UserInputType.Touch then
                         dragging = true
+                        tween(Knob, 0.1, { Size = UDim2.fromOffset(18, 18) })
                         setFromX(input.Position.X)
-                    end
-                end)
-                Hit.InputChanged:Connect(function(input)
-                    if dragging and (
-                        input.UserInputType == Enum.UserInputType.MouseMovement
-                        or input.UserInputType == Enum.UserInputType.Touch
-                    ) then
-                        setFromX(input.Position.X)
-                    end
-                end)
-                UserInputService.InputChanged:Connect(function(input)
-                    if dragging and (
-                        input.UserInputType == Enum.UserInputType.MouseMovement
-                        or input.UserInputType == Enum.UserInputType.Touch
-                    ) then
-                        setFromX(input.Position.X)
-                    end
-                end)
-                UserInputService.InputEnded:Connect(function(input)
-                    if input.UserInputType == Enum.UserInputType.MouseButton1
-                    or input.UserInputType == Enum.UserInputType.Touch then
-                        dragging = false
+                        -- Connect move / end ONLY while dragging this slider.
+                        -- This prevents the old bug where every slider added
+                        -- a global InputChanged listener that never stopped.
+                        if moveConn then moveConn:Disconnect() end
+                        moveConn = UserInputService.InputChanged:Connect(function(i)
+                            if dragging and (
+                                i.UserInputType == Enum.UserInputType.MouseMovement
+                                or i.UserInputType == Enum.UserInputType.Touch
+                            ) then
+                                setFromX(i.Position.X)
+                            end
+                        end)
+                        if endConn then endConn:Disconnect() end
+                        endConn = UserInputService.InputEnded:Connect(function(i)
+                            if i.UserInputType == Enum.UserInputType.MouseButton1
+                            or i.UserInputType == Enum.UserInputType.Touch then
+                                stopDrag()
+                            end
+                        end)
                     end
                 end)
 
-                function api:SetValue(v) apply(tonumber(v) or min) end
+                function api:SetValue(v) apply(tonumber(v) or min, false, true) end
 
                 if id then KaizenUI.Options[id] = api end
                 if o.Default ~= nil and o.Callback then
@@ -1608,9 +1600,11 @@ function KaizenUI:CreateWindow(opts)
                 o = o or {}
                 local Card = makeCard(60)
 
+                -- The whole card IS the button now (no separate "Run" pill).
+                -- Clicking anywhere on the card fires Callback.
                 local hasDesc = o.Description and o.Description ~= ""
                 new("TextLabel", {
-                    Size = UDim2.new(1, -120, 0, 18),
+                    Size = UDim2.new(1, -40, 0, 18),
                     Position = UDim2.fromOffset(0, hasDesc and 0 or 6),
                     BackgroundTransparency = 1,
                     Text = o.Title or "Button",
@@ -1622,7 +1616,7 @@ function KaizenUI:CreateWindow(opts)
                 })
                 if hasDesc then
                     new("TextLabel", {
-                        Size = UDim2.new(1, -120, 0, 16),
+                        Size = UDim2.new(1, -40, 0, 16),
                         Position = UDim2.fromOffset(0, 20),
                         BackgroundTransparency = 1,
                         Text = o.Description,
@@ -1634,30 +1628,43 @@ function KaizenUI:CreateWindow(opts)
                     })
                 end
 
-                local Btn = new("TextButton", {
+                -- Chevron on the right as a subtle affordance
+                local Chev = new("ImageLabel", {
                     AnchorPoint = Vector2.new(1, 0.5),
                     Position = UDim2.new(1, 0, 0.5, 0),
-                    Size = UDim2.fromOffset(100, 30),
-                    BackgroundColor3 = Theme.Accent,
-                    BorderSizePixel = 0,
-                    Text = o.ButtonText or "Run",
-                    TextColor3 = Color3.fromRGB(12, 12, 14),
-                    Font = FontBold,
-                    TextSize = 12,
+                    Size = UDim2.fromOffset(14, 14),
+                    BackgroundTransparency = 1,
+                    Image = resolveIcon("chevron-right") ~= "" and resolveIcon("chevron-right") or resolveIcon("chevron-down"),
+                    ImageColor3 = Theme.SubText,
+                    Rotation = resolveIcon("chevron-right") ~= "" and 0 or -90,
+                    Parent = Card,
+                })
+
+                local Hit = new("TextButton", {
+                    Size = UDim2.fromScale(1, 1),
+                    BackgroundTransparency = 1,
+                    Text = "",
                     AutoButtonColor = false,
                     Parent = Card,
                 })
-                corner(Btn, 8)
-                Btn.MouseEnter:Connect(function()
-                    tween(Btn, 0.12, { BackgroundColor3 = Color3.fromRGB(230, 230, 235) })
+                Hit.MouseEnter:Connect(function()
+                    tween(Card, 0.12, { BackgroundColor3 = Theme.Hover })
+                    tween(Chev, 0.12, { ImageColor3 = Theme.Text })
                 end)
-                Btn.MouseLeave:Connect(function()
-                    tween(Btn, 0.12, { BackgroundColor3 = Theme.Accent })
+                Hit.MouseLeave:Connect(function()
+                    tween(Card, 0.12, { BackgroundColor3 = Theme.Elevated })
+                    tween(Chev, 0.12, { ImageColor3 = Theme.SubText })
                 end)
-                Btn.MouseButton1Click:Connect(function()
+                Hit.MouseButton1Click:Connect(function()
+                    -- Press feedback
+                    tween(Card, 0.08, { BackgroundColor3 = Theme.Active })
+                    task.delay(0.12, function()
+                        tween(Card, 0.12, { BackgroundColor3 = Theme.Elevated })
+                    end)
                     if o.Callback then task.spawn(o.Callback) end
                 end)
-                return { _button = Btn }
+
+                return { _button = Hit }
             end
 
             ----------------------------------------------------------------
