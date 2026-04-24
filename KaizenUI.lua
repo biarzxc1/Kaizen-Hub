@@ -1033,18 +1033,32 @@ function KaizenUI:CreateWindow(opts)
         })
     end
 
+    -- Sidebar tab state transitions.
+    --
+    -- Instead of swapping to a second "muted" color (which reads too grey
+    -- next to white), inactive tabs keep the same Theme.Text color and just
+    -- dim via TextTransparency / ImageTransparency. This matches the
+    -- reference exactly: inactive tabs are soft-white, not grey.
+    --
+    --   active   -> 0.00  (full white)
+    --   hover    -> 0.15  (bright but not fully active)
+    --   inactive -> 0.45  (soft-white)
+    local TAB_INACTIVE_T = 0.45
+    local TAB_HOVER_T    = 0.15
+    local TAB_ACTIVE_T   = 0.00
+
     local function selectTab(tab)
         if Window._activeTab == tab then return end
         for _, t in ipairs(Window._ordered) do
-            tween(t._label,  0.15, { TextColor3 = Theme.SubText })
-            tween(t._icon,   0.15, { ImageColor3 = Theme.SubText })
-            tween(t._bar,    0.15, { BackgroundTransparency = 1 })
+            tween(t._label, 0.15, { TextTransparency  = TAB_INACTIVE_T })
+            tween(t._icon,  0.15, { ImageTransparency = TAB_INACTIVE_T })
+            tween(t._bar,   0.15, { BackgroundTransparency = 1 })
             t._page.Visible = false
         end
         Window._activeTab = tab
-        tween(tab._label,  0.18, { TextColor3 = Theme.Text })
-        tween(tab._icon,   0.18, { ImageColor3 = Theme.Text })
-        tween(tab._bar,    0.18, { BackgroundTransparency = 0 })
+        tween(tab._label, 0.18, { TextTransparency  = TAB_ACTIVE_T })
+        tween(tab._icon,  0.18, { ImageTransparency = TAB_ACTIVE_T })
+        tween(tab._bar,   0.18, { BackgroundTransparency = 0 })
         tab._page.Visible = true
     end
 
@@ -1057,11 +1071,12 @@ function KaizenUI:CreateWindow(opts)
         local Tab = {}
         Tab.Name = name
 
-        -- Sidebar button — flat row, 44px for comfortable touch targets.
-        -- No filled pill; the active state is shown by a tiny vertical
-        -- accent bar on the far left (matches the design reference).
+        -- Sidebar tab row — flat, no pill background. The active state is
+        -- shown by (a) a short rounded vertical accent bar flush with the
+        -- sidebar's left edge and (b) full-brightness text/icon, while
+        -- inactive rows dim via TextTransparency only.
         local Btn = new("TextButton", {
-            Size = UDim2.new(1, 0, 0, 44),
+            Size = UDim2.new(1, 0, 0, 48),
             BackgroundTransparency = 1,
             AutoButtonColor = false,
             Active = true,
@@ -1070,13 +1085,13 @@ function KaizenUI:CreateWindow(opts)
             Parent = TabList,
         })
 
-        -- Active indicator: thin vertical bar on the far-left edge.
+        -- Active indicator: short rounded bar pinned to the far-left edge.
         local ActiveBar = new("Frame", {
             AnchorPoint = Vector2.new(0, 0.5),
             Position = UDim2.new(0, 0, 0.5, 0),
-            Size = UDim2.fromOffset(3, 20),
+            Size = UDim2.fromOffset(3, 22),
             BackgroundColor3 = Theme.Text,
-            BackgroundTransparency = 1,
+            BackgroundTransparency = 1, -- hidden until the tab is selected
             BorderSizePixel = 0,
             Parent = Btn,
         })
@@ -1085,20 +1100,25 @@ function KaizenUI:CreateWindow(opts)
         local IconImg = new("ImageLabel", {
             AnchorPoint = Vector2.new(0, 0.5),
             Position = UDim2.new(0, 14, 0.5, 0),
-            Size = UDim2.fromOffset(18, 18),
+            Size = UDim2.fromOffset(20, 20),
             BackgroundTransparency = 1,
             Image = resolveIcon(iconKey),
-            ImageColor3 = Theme.SubText,
+            ImageColor3 = Theme.Text,
+            ImageTransparency = TAB_INACTIVE_T,
             Parent = Btn,
         })
 
+        -- Using RichText lets the "|" prefix sit slightly further from the
+        -- label without introducing a separate TextLabel instance.
         local Lbl = new("TextLabel", {
             AnchorPoint = Vector2.new(0, 0.5),
-            Position = UDim2.new(0, 42, 0.5, 0),
-            Size = UDim2.new(1, -46, 1, 0),
+            Position = UDim2.new(0, 44, 0.5, 0),
+            Size = UDim2.new(1, -50, 1, 0),
             BackgroundTransparency = 1,
-            Text = "| " .. name,
-            TextColor3 = Theme.SubText,
+            RichText = true,
+            Text = "|  " .. name,
+            TextColor3 = Theme.Text,
+            TextTransparency = TAB_INACTIVE_T,
             Font = FontSemi,
             TextSize = 15,
             TextXAlignment = Enum.TextXAlignment.Left,
@@ -1108,14 +1128,14 @@ function KaizenUI:CreateWindow(opts)
 
         Btn.MouseEnter:Connect(function()
             if Window._activeTab ~= Tab then
-                tween(Lbl, 0.15, { TextColor3 = Theme.Text })
-                tween(IconImg, 0.15, { ImageColor3 = Theme.Text })
+                tween(Lbl,     0.15, { TextTransparency  = TAB_HOVER_T })
+                tween(IconImg, 0.15, { ImageTransparency = TAB_HOVER_T })
             end
         end)
         Btn.MouseLeave:Connect(function()
             if Window._activeTab ~= Tab then
-                tween(Lbl, 0.15, { TextColor3 = Theme.SubText })
-                tween(IconImg, 0.15, { ImageColor3 = Theme.SubText })
+                tween(Lbl,     0.15, { TextTransparency  = TAB_INACTIVE_T })
+                tween(IconImg, 0.15, { ImageTransparency = TAB_INACTIVE_T })
             end
         end)
 
@@ -1501,149 +1521,240 @@ function KaizenUI:CreateWindow(opts)
             ----------------------------------------------------------------
             function Section:AddDropdown(id, o)
                 o = o or {}
-                local Card = makeCard(60)
-
                 local hasDesc = o.Description and o.Description ~= ""
+                local Card = makeCard(hasDesc and 66 or 56)
+
+                -- Title on the left (bold).
                 new("TextLabel", {
-                    Size = UDim2.new(1, -160, 0, 18),
-                    Position = UDim2.fromOffset(0, hasDesc and 0 or 6),
+                    AnchorPoint = Vector2.new(0, 0.5),
+                    Position = UDim2.new(0, 0, hasDesc and 0.3 or 0.5, 0),
+                    Size = UDim2.new(0.55, -8, 0, 20),
                     BackgroundTransparency = 1,
                     Text = o.Title or id or "Dropdown",
                     TextColor3 = Theme.Text,
                     Font = FontBold,
                     TextSize = 14,
                     TextXAlignment = Enum.TextXAlignment.Left,
+                    TextTruncate = Enum.TextTruncate.AtEnd,
                     Parent = Card,
                 })
                 if hasDesc then
                     new("TextLabel", {
-                        Size = UDim2.new(1, -160, 0, 16),
-                        Position = UDim2.fromOffset(0, 20),
+                        AnchorPoint = Vector2.new(0, 0.5),
+                        Position = UDim2.new(0, 0, 0.72, 0),
+                        Size = UDim2.new(0.55, -8, 0, 16),
                         BackgroundTransparency = 1,
                         Text = o.Description,
                         TextColor3 = Theme.SubText,
                         Font = FontSans,
                         TextSize = 12,
                         TextXAlignment = Enum.TextXAlignment.Left,
+                        TextTruncate = Enum.TextTruncate.AtEnd,
                         Parent = Card,
                     })
                 end
 
-                local Btn = new("TextButton", {
+                -- Trigger area: borderless, inline on the right. Shows the
+                -- current value in muted grey + a chevron (matches AsusHub).
+                local Trigger = new("TextButton", {
                     AnchorPoint = Vector2.new(1, 0.5),
                     Position = UDim2.new(1, 0, 0.5, 0),
-                    Size = UDim2.fromOffset(140, 32),
-                    BackgroundColor3 = Theme.Hover,
-                    BorderSizePixel = 0,
-                    Text = tostring(o.Default or "Select..."),
-                    TextColor3 = Theme.Text,
-                    Font = FontSans,
-                    TextSize = 12,
+                    Size = UDim2.new(0.45, -16, 1, -16),
+                    BackgroundTransparency = 1,
+                    Text = "",
                     AutoButtonColor = false,
+                    Active = true,
                     Parent = Card,
                 })
-                corner(Btn, 8)
-                stroke(Btn, Theme.Border, 1, 0.25)
-                padding(Btn, 0, 28, 0, 12)
-                Btn.TextXAlignment = Enum.TextXAlignment.Left
+
+                local ValueLbl = new("TextLabel", {
+                    AnchorPoint = Vector2.new(1, 0.5),
+                    Position = UDim2.new(1, -20, 0.5, 0),
+                    Size = UDim2.new(1, -24, 1, 0),
+                    BackgroundTransparency = 1,
+                    Text = tostring(o.Default or "Select..."),
+                    TextColor3 = Theme.SubText,
+                    Font = FontSans,
+                    TextSize = 13,
+                    TextXAlignment = Enum.TextXAlignment.Right,
+                    TextTruncate = Enum.TextTruncate.AtEnd,
+                    Parent = Trigger,
+                })
 
                 local Chev = new("ImageLabel", {
                     AnchorPoint = Vector2.new(1, 0.5),
-                    Position = UDim2.new(1, -10, 0.5, 0),
-                    Size = UDim2.fromOffset(12, 12),
+                    Position = UDim2.new(1, 0, 0.5, 0),
+                    Size = UDim2.fromOffset(14, 14),
                     BackgroundTransparency = 1,
                     Image = resolveIcon("chevron-down"),
                     ImageColor3 = Theme.SubText,
-                    Parent = Btn,
+                    Parent = Trigger,
                 })
 
+                -- Overlay menu. Parented to the ScreenGui so it can float on
+                -- top of any card. Contains a "Search" input + option list.
                 local Menu = new("Frame", {
-                    Size = UDim2.fromOffset(140, 0),
+                    Name = "KaizenDropdownMenu",
+                    Size = UDim2.fromOffset(220, 0),
                     BackgroundColor3 = Theme.Elevated,
                     BorderSizePixel = 0,
                     Visible = false,
-                    ZIndex = 50,
+                    ZIndex = 200,
                     Parent = gui,
                 })
-                corner(Menu, 8)
-                stroke(Menu, Theme.Border, 1, 0.15)
-                local menuLayout = Instance.new("UIListLayout")
-                menuLayout.Padding = UDim.new(0, 2)
-                menuLayout.SortOrder = Enum.SortOrder.LayoutOrder
-                menuLayout.Parent = Menu
-                padding(Menu, 4, 4, 4, 4)
+                corner(Menu, 10)
+                stroke(Menu, Theme.Border, 1, 0.2)
+                padding(Menu, 8, 8, 8, 8)
+
+                local Search = new("TextBox", {
+                    Size = UDim2.new(1, 0, 0, 30),
+                    BackgroundColor3 = Theme.Hover,
+                    BorderSizePixel = 0,
+                    PlaceholderText = o.SearchPlaceholder or "Search",
+                    PlaceholderColor3 = Theme.SubText,
+                    Text = "",
+                    TextColor3 = Theme.Text,
+                    Font = FontSans,
+                    TextSize = 13,
+                    ClearTextOnFocus = false,
+                    TextXAlignment = Enum.TextXAlignment.Center,
+                    ZIndex = 201,
+                    Parent = Menu,
+                })
+                corner(Search, 8)
+                padding(Search, 0, 10, 0, 10)
+
+                local List = new("ScrollingFrame", {
+                    Position = UDim2.fromOffset(0, 38),
+                    Size = UDim2.new(1, 0, 1, -38),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ScrollBarThickness = 3,
+                    ScrollBarImageColor3 = Theme.Border,
+                    CanvasSize = UDim2.new(0, 0, 0, 0),
+                    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                    ScrollingDirection = Enum.ScrollingDirection.Y,
+                    ZIndex = 201,
+                    Parent = Menu,
+                })
+                local listLayout = Instance.new("UIListLayout")
+                listLayout.Padding = UDim.new(0, 2)
+                listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                listLayout.Parent = List
+
+                -- Outside-tap scrim (closes dropdown on tap outside).
+                local OutsideHit = new("TextButton", {
+                    Name = "KaizenDropdownScrim",
+                    Size = UDim2.fromScale(1, 1),
+                    BackgroundTransparency = 1,
+                    Text = "",
+                    AutoButtonColor = false,
+                    Visible = false,
+                    ZIndex = 199,
+                    Parent = gui,
+                })
 
                 local api = { Value = o.Default, Values = o.Values or {} }
                 local open = false
                 local itemBtns = {}
 
-                local function rebuild()
+                local function closeMenu()
+                    open = false
+                    OutsideHit.Visible = false
+                    tween(Chev, 0.15, { Rotation = 0 })
+                    tween(Menu, 0.15, { Size = UDim2.fromOffset(Menu.AbsoluteSize.X, 0) })
+                    task.delay(0.16, function()
+                        if not open then Menu.Visible = false end
+                    end)
+                end
+
+                local function buildItems(filter)
                     for _, c in ipairs(itemBtns) do c:Destroy() end
                     table.clear(itemBtns)
+                    filter = filter and filter:lower() or ""
                     for _, v in ipairs(api.Values) do
-                        local It = new("TextButton", {
-                            Size = UDim2.new(1, 0, 0, 28),
-                            BackgroundColor3 = Theme.Hover,
-                            BackgroundTransparency = 1,
-                            BorderSizePixel = 0,
-                            Text = tostring(v),
-                            TextColor3 = Theme.Text,
-                            Font = FontSans,
-                            TextSize = 12,
-                            AutoButtonColor = false,
-                            Parent = Menu,
-                            ZIndex = 51,
-                        })
-                        corner(It, 6)
-                        padding(It, 0, 10, 0, 10)
-                        It.TextXAlignment = Enum.TextXAlignment.Left
-                        It.MouseEnter:Connect(function() tween(It, 0.1, { BackgroundTransparency = 0 }) end)
-                        It.MouseLeave:Connect(function() tween(It, 0.1, { BackgroundTransparency = 1 }) end)
-                        It.MouseButton1Click:Connect(function()
-                            api.Value = v
-                            Btn.Text = tostring(v)
-                            open = false
-                            tween(Menu, 0.15, { Size = UDim2.fromOffset(140, 0) })
-                            tween(Chev, 0.15, { Rotation = 0 })
-                            task.wait(0.15)
-                            Menu.Visible = false
-                            if o.Callback then task.spawn(o.Callback, v) end
-                        end)
-                        table.insert(itemBtns, It)
+                        local str = tostring(v)
+                        if filter == "" or str:lower():find(filter, 1, true) then
+                            local isActive = (v == api.Value)
+                            local It = new("TextButton", {
+                                Size = UDim2.new(1, 0, 0, 32),
+                                BackgroundColor3 = isActive and Theme.Hover or Theme.Elevated,
+                                BackgroundTransparency = isActive and 0 or 1,
+                                BorderSizePixel = 0,
+                                Text = str,
+                                TextColor3 = Theme.Text,
+                                Font = isActive and FontBold or FontSans,
+                                TextSize = 13,
+                                AutoButtonColor = false,
+                                ZIndex = 202,
+                                Parent = List,
+                            })
+                            corner(It, 8)
+                            padding(It, 0, 12, 0, 12)
+                            It.TextXAlignment = Enum.TextXAlignment.Left
+                            It.MouseEnter:Connect(function()
+                                tween(It, 0.1, { BackgroundTransparency = 0 })
+                            end)
+                            It.MouseLeave:Connect(function()
+                                if v ~= api.Value then
+                                    tween(It, 0.1, { BackgroundTransparency = 1 })
+                                end
+                            end)
+                            It.MouseButton1Click:Connect(function()
+                                api.Value  = v
+                                ValueLbl.Text = str
+                                closeMenu()
+                                if o.Callback then task.spawn(o.Callback, v) end
+                            end)
+                            table.insert(itemBtns, It)
+                        end
                     end
                 end
-                rebuild()
+                buildItems("")
 
-                local function toggle()
-                    open = not open
-                    if open then
-                        Menu.Visible = true
-                        local pos = Btn.AbsolutePosition
-                        local sz  = Btn.AbsoluteSize
-                        Menu.Size = UDim2.fromOffset(sz.X, 0)
-                        Menu.Position = UDim2.fromOffset(pos.X, pos.Y + sz.Y + 4)
-                        local h = math.min(#api.Values * 30 + 8, 180)
-                        tween(Menu, 0.18, { Size = UDim2.fromOffset(sz.X, h) })
-                        tween(Chev, 0.18, { Rotation = 180 })
-                    else
-                        tween(Menu, 0.15, { Size = UDim2.fromOffset(Btn.AbsoluteSize.X, 0) })
-                        tween(Chev, 0.15, { Rotation = 0 })
-                        task.wait(0.15)
-                        Menu.Visible = false
-                    end
+                Search:GetPropertyChangedSignal("Text"):Connect(function()
+                    buildItems(Search.Text)
+                end)
+
+                local function openMenu()
+                    open = true
+                    Search.Text = ""
+                    buildItems("")
+                    Menu.Visible = true
+                    OutsideHit.Visible = true
+
+                    -- Size: at least as wide as the trigger; capped reasonably.
+                    local tpos = Trigger.AbsolutePosition
+                    local tsz  = Trigger.AbsoluteSize
+                    local menuW = math.max(220, tsz.X)
+                    local itemCount = math.max(#api.Values, 1)
+                    local targetH = math.min(8 + 38 + itemCount * 34, 260)
+
+                    -- Anchor to the right edge of the trigger, below it.
+                    Menu.Size = UDim2.fromOffset(menuW, 0)
+                    Menu.Position = UDim2.fromOffset(
+                        tpos.X + tsz.X - menuW,
+                        tpos.Y + tsz.Y + 4
+                    )
+                    tween(Menu, 0.18, { Size = UDim2.fromOffset(menuW, targetH) })
+                    tween(Chev, 0.18, { Rotation = 180 })
                 end
 
-                Btn.MouseButton1Click:Connect(toggle)
+                Trigger.MouseButton1Click:Connect(function()
+                    if open then closeMenu() else openMenu() end
+                end)
+                OutsideHit.MouseButton1Click:Connect(closeMenu)
 
                 function api:SetValue(v)
                     api.Value = v
-                    Btn.Text = tostring(v or "Select...")
+                    ValueLbl.Text = tostring(v or "Select...")
                     if o.Callback then task.spawn(o.Callback, v) end
+                    if open then buildItems(Search.Text) end
                 end
 
                 function api:SetValues(list)
                     api.Values = list or {}
-                    rebuild()
+                    if open then buildItems(Search.Text) end
                 end
 
                 if id then KaizenUI.Options[id] = api end
