@@ -411,57 +411,72 @@ function KaizenUI:CreateWindow(cfg)
         Parent = TabList,
     })
 
-    -- Footer status card (like "Injecting... Please wait")
-    local Status = new("Frame", {
-        Name = "Status",
+    -- Footer profile card (avatar + nickname + total executions)
+    local Profile = new("Frame", {
+        Name = "Profile",
         Size = UDim2.new(1, 0, 0, 64),
         Position = UDim2.new(0, 0, 1, -64),
         BackgroundColor3 = Theme.Card,
         BorderSizePixel = 0,
         Parent = Sidebar,
     })
-    corner(Status, 10)
-    stroke(Status, Theme.BorderSubtle, 1)
-    padding(Status, 10, 10, 10, 10)
+    corner(Profile, 10)
+    stroke(Profile, Theme.BorderSubtle, 1)
+    padding(Profile, 10, 10, 10, 10)
 
-    local Spinner = new("ImageLabel", {
-        Name = "Spinner",
-        Size = UDim2.fromOffset(28, 28),
+    local Avatar = new("ImageLabel", {
+        Name = "Avatar",
+        Size = UDim2.fromOffset(36, 36),
         Position = UDim2.new(0, 0, 0.5, 0),
         AnchorPoint = Vector2.new(0, 0.5),
-        BackgroundTransparency = 1,
-        Image = resolveIcon("loader"),
-        ImageColor3 = Theme.Text,
-        Parent = Status,
+        BackgroundColor3 = Theme.Background,
+        BorderSizePixel = 0,
+        Image = "",
+        ScaleType = Enum.ScaleType.Crop,
+        Parent = Profile,
     })
-    local StatusTitle = new("TextLabel", {
-        Size = UDim2.new(1, -36, 0, 16),
-        Position = UDim2.fromOffset(36, 2),
+    corner(Avatar, 18) -- circular
+    stroke(Avatar, Theme.BorderSubtle, 1)
+
+    local NameLabel = new("TextLabel", {
+        Name = "PlayerName",
+        Size = UDim2.new(1, -46, 0, 16),
+        Position = UDim2.fromOffset(46, 4),
         BackgroundTransparency = 1,
-        Text = "Ready",
+        Text = (LocalPlayer and LocalPlayer.DisplayName) or "Player",
         TextColor3 = Theme.Text,
         Font = Enum.Font.GothamBold,
         TextSize = 13,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = Status,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        Parent = Profile,
     })
-    local StatusDesc = new("TextLabel", {
-        Size = UDim2.new(1, -36, 0, 14),
-        Position = UDim2.fromOffset(36, 22),
+    local ExecLabel = new("TextLabel", {
+        Name = "Executions",
+        Size = UDim2.new(1, -46, 0, 14),
+        Position = UDim2.fromOffset(46, 24),
         BackgroundTransparency = 1,
-        Text = "All systems nominal",
+        Text = "Executions: 0",
         TextColor3 = Theme.SubText,
         Font = Enum.Font.Gotham,
         TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = Status,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        Parent = Profile,
     })
 
-    -- rotate spinner
+    -- Load avatar asynchronously (works both in Studio and executors)
     task.spawn(function()
-        while Spinner.Parent do
-            Spinner.Rotation = (Spinner.Rotation + 6) % 360
-            RunService.RenderStepped:Wait()
+        if not LocalPlayer then return end
+        local ok, url = pcall(function()
+            return Players:GetUserThumbnailAsync(
+                LocalPlayer.UserId,
+                Enum.ThumbnailType.HeadShot,
+                Enum.ThumbnailSize.Size150x150
+            )
+        end)
+        if ok and url then
+            Avatar.Image = url
         end
     end)
 
@@ -483,27 +498,114 @@ function KaizenUI:CreateWindow(cfg)
         Parent = Content,
     })
 
+    -- Capture content padding so we can tighten it on mobile
+    local ContentPadding = Content:FindFirstChildOfClass("UIPadding")
+    local TopBarPadding  = TopBar:FindFirstChildOfClass("UIPadding")
+
     ----------------------------------------------------------------
-    -- Responsive resizing
+    -- Responsive resizing (true mobile-first)
     ----------------------------------------------------------------
+    local function isTouchOnly()
+        return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+    end
+
     local function updateResponsive()
-        local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
-        local narrow = vp.X < 700
+        local cam = workspace.CurrentCamera
+        local vp = (cam and cam.ViewportSize) or Vector2.new(1280, 720)
+        -- Treat as mobile if touch-only OR viewport is small on either axis.
+        local narrow = isTouchOnly() or vp.X < 900 or vp.Y < 560
+
         SubtitleLabel.Visible = not narrow
+
         if narrow then
-            Root.Size = UDim2.fromOffset(math.min(vp.X - 20, 380), math.min(vp.Y - 40, 460))
-            Sidebar.Size = UDim2.new(0, 150, 1, 0)
-            Content.Size = UDim2.new(1, -150, 1, 0)
-            Content.Position = UDim2.fromOffset(150, 0)
+            -- Fit inside the viewport (leave a small safe margin)
+            local w = math.clamp(math.floor(vp.X * 0.94), 300, 640)
+            local h = math.clamp(math.floor(vp.Y * 0.9),  320, 520)
+            Root.Size = UDim2.fromOffset(w, h)
+
+            -- Sidebar ~30% of window width
+            local sw = math.clamp(math.floor(w * 0.3), 110, 170)
+            Sidebar.Size       = UDim2.new(0, sw, 1, 0)
+            Content.Size       = UDim2.new(1, -sw, 1, 0)
+            Content.Position   = UDim2.fromOffset(sw, 0)
+
+            -- Tighter content padding on mobile
+            if ContentPadding then
+                ContentPadding.PaddingTop    = UDim.new(0, 14)
+                ContentPadding.PaddingBottom = UDim.new(0, 14)
+                ContentPadding.PaddingLeft   = UDim.new(0, 14)
+                ContentPadding.PaddingRight  = UDim.new(0, 14)
+            end
+            if TopBarPadding then
+                TopBarPadding.PaddingLeft  = UDim.new(0, 12)
+                TopBarPadding.PaddingRight = UDim.new(0, 12)
+            end
+
+            -- Shrink header sizes
+            TitleLabel.TextSize = 15
+            TitleLabel.Size     = UDim2.fromOffset(110, 24)
+
+            -- Smaller sidebar padding
+            local sidebarPad = Sidebar:FindFirstChildOfClass("UIPadding")
+            if sidebarPad then
+                sidebarPad.PaddingLeft   = UDim.new(0, 8)
+                sidebarPad.PaddingRight  = UDim.new(0, 8)
+                sidebarPad.PaddingTop    = UDim.new(0, 8)
+                sidebarPad.PaddingBottom = UDim.new(0, 8)
+            end
         else
-            Sidebar.Size = UDim2.new(0, 220, 1, 0)
-            Content.Size = UDim2.new(1, -220, 1, 0)
+            Root.Size = UDim2.fromOffset(820, 520)
+            Sidebar.Size     = UDim2.new(0, 220, 1, 0)
+            Content.Size     = UDim2.new(1, -220, 1, 0)
             Content.Position = UDim2.fromOffset(220, 0)
+
+            if ContentPadding then
+                ContentPadding.PaddingTop    = UDim.new(0, 24)
+                ContentPadding.PaddingBottom = UDim.new(0, 24)
+                ContentPadding.PaddingLeft   = UDim.new(0, 24)
+                ContentPadding.PaddingRight  = UDim.new(0, 24)
+            end
+            if TopBarPadding then
+                TopBarPadding.PaddingLeft  = UDim.new(0, 16)
+                TopBarPadding.PaddingRight = UDim.new(0, 16)
+            end
+
+            TitleLabel.TextSize = 16
+            TitleLabel.Size     = UDim2.fromOffset(140, 28)
+
+            local sidebarPad = Sidebar:FindFirstChildOfClass("UIPadding")
+            if sidebarPad then
+                sidebarPad.PaddingLeft   = UDim.new(0, 12)
+                sidebarPad.PaddingRight  = UDim.new(0, 12)
+                sidebarPad.PaddingTop    = UDim.new(0, 12)
+                sidebarPad.PaddingBottom = UDim.new(0, 12)
+            end
+        end
+
+        -- Keep window inside the viewport after a resize
+        local absSize = Root.AbsoluteSize
+        local maxX = vp.X - absSize.X / 2
+        local minX = absSize.X / 2
+        local maxY = vp.Y - absSize.Y / 2
+        local minY = absSize.Y / 2
+        local pos = Root.Position
+        local px = math.clamp(pos.X.Offset, minX, maxX)
+        local py = math.clamp(pos.Y.Offset, minY, maxY)
+        if pos.X.Scale ~= 0.5 or pos.Y.Scale ~= 0.5 or px ~= pos.X.Offset or py ~= pos.Y.Offset then
+            -- recentre on first pass, otherwise clamp
+            if pos.X.Scale == 0.5 and pos.Y.Scale == 0.5 then
+                -- first run: keep centred
+            else
+                Root.Position = UDim2.fromOffset(px, py)
+            end
         end
     end
+
     if workspace.CurrentCamera then
         workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateResponsive)
     end
+    -- Also react if the device flips between touch/keyboard
+    UserInputService.LastInputTypeChanged:Connect(updateResponsive)
     updateResponsive()
 
     ----------------------------------------------------------------
@@ -514,12 +616,30 @@ function KaizenUI:CreateWindow(cfg)
     Window._activeTab = nil
     Window.ScreenGui = ScreenGui
     Window.Root = Root
+    Window.Executions = 0
 
-    function Window:SetStatus(title, desc, iconKey)
-        StatusTitle.Text = title or StatusTitle.Text
-        StatusDesc.Text = desc or StatusDesc.Text
-        if iconKey then Spinner.Image = resolveIcon(iconKey) end
+    -- Update the profile card (avatar + nickname)
+    function Window:SetProfile(cfg)
+        cfg = cfg or {}
+        if cfg.Name then NameLabel.Text = tostring(cfg.Name) end
+        if cfg.Avatar then Avatar.Image = tostring(cfg.Avatar) end
     end
+
+    -- Set the "Executions" counter to a specific value
+    function Window:SetExecutions(n)
+        self.Executions = tonumber(n) or 0
+        ExecLabel.Text = "Executions: " .. self.Executions
+    end
+
+    -- Increment the counter (called automatically on every component interaction)
+    function Window:AddExecution()
+        self.Executions += 1
+        ExecLabel.Text = "Executions: " .. self.Executions
+    end
+
+    -- Backwards-compat: `SetStatus` used to update the footer card.
+    -- Keep it as a no-op so old scripts don't error.
+    function Window:SetStatus() end
 
     function Window:Destroy()
         ScreenGui:Destroy()
@@ -776,6 +896,7 @@ function KaizenUI:CreateWindow(cfg)
                     Position = value and UDim2.new(1, -21, 0.5, 0) or UDim2.new(0, 3, 0.5, 0),
                     BackgroundColor3 = value and Theme.ToggleKnobOn or Theme.ToggleKnobOff,
                 })
+                Window:AddExecution()
                 if opts.Callback then
                     task.spawn(opts.Callback, value)
                 end
@@ -829,6 +950,7 @@ function KaizenUI:CreateWindow(cfg)
             btn.MouseEnter:Connect(function() tween(btn, 0.12, { BackgroundColor3 = Color3.fromRGB(220, 220, 220) }) end)
             btn.MouseLeave:Connect(function() tween(btn, 0.12, { BackgroundColor3 = Theme.Accent }) end)
             btn.MouseButton1Click:Connect(function()
+                Window:AddExecution()
                 if opts.Callback then task.spawn(opts.Callback) end
             end)
         end
@@ -915,7 +1037,10 @@ function KaizenUI:CreateWindow(cfg)
             UserInputService.InputEnded:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
-                    dragging = false
+                    if dragging then
+                        dragging = false
+                        Window:AddExecution()
+                    end
                 end
             end)
         end
@@ -1021,6 +1146,7 @@ function KaizenUI:CreateWindow(cfg)
                     value = opt
                     btn.Text = tostring(opt)
                     toggle()
+                    Window:AddExecution()
                     if opts.Callback then task.spawn(opts.Callback, opt) end
                 end)
             end
@@ -1088,6 +1214,7 @@ function KaizenUI:CreateWindow(cfg)
             stroke(tb, Theme.Border, 1)
             padding(tb, 0, 10, 0, 10)
             tb.FocusLost:Connect(function(enter)
+                if enter then Window:AddExecution() end
                 if opts.Callback then task.spawn(opts.Callback, tb.Text, enter) end
             end)
         end
